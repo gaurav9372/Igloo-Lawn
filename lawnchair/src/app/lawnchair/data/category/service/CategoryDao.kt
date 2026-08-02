@@ -58,6 +58,16 @@ interface CategoryDao {
         timestamp: Long = System.currentTimeMillis(),
     )
 
+    @Query("UPDATE Categories SET rank = :rank WHERE id = :id")
+    suspend fun updateCategoryRank(id: Int, rank: Int)
+
+    @Transaction
+    suspend fun reorderCategories(orderedIds: List<Int>) {
+        orderedIds.forEachIndexed { index, id ->
+            updateCategoryRank(id, index)
+        }
+    }
+
     @Query("DELETE FROM Categories WHERE id = :categoryId")
     suspend fun deleteCategory(categoryId: Int)
 

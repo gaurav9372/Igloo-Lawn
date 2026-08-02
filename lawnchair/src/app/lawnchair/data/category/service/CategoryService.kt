@@ -44,6 +44,10 @@ class CategoryService(context: Context) {
         categoryDao.deleteCategory(id)
     }
 
+    suspend fun reorderCategories(orderedIds: List<Int>) = withContext(Dispatchers.IO) {
+        categoryDao.reorderCategories(orderedIds)
+    }
+
     private fun CategoryWithItems.toCategoryEntry() = CategoryEntry(
         id = category.id,
         title = category.title,

@@ -73,6 +73,9 @@ fun AppDrawerCategoriesPreference(
         onDeleteCategory = {
             viewModel.deleteCategory(it.id)
         },
+        onReorderCategories = { orderedIds ->
+            viewModel.reorderCategories(orderedIds)
+        },
     )
 }
 
@@ -84,6 +87,7 @@ fun AppDrawerCategoriesPreference(
     onOpenCategoryDetail: (Int) -> Unit,
     onRenameCategory: (Int, String) -> Unit,
     onDeleteCategory: (CategoryEntry) -> Unit,
+    onReorderCategories: (List<Int>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val bottomSheetHandler = bottomSheetHandler
@@ -129,7 +133,9 @@ fun AppDrawerCategoriesPreference(
                 label = null,
                 items = displayList,
                 defaultList = displayList,
-                onOrderChange = { _ -> },
+                onOrderChange = { reordered ->
+                    onReorderCategories(reordered.map { it.id })
+                },
             ) { categoryEntry, _, _ ->
                 val interactionSource = remember { MutableInteractionSource() }
                 CategoryItem(

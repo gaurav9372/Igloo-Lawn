@@ -81,6 +81,12 @@ class CategoryViewModel(
         }
     }
 
+    fun reorderCategories(orderedIds: List<Int>) {
+        viewModelScope.launch {
+            repository.reorderCategories(orderedIds)
+        }
+    }
+
     fun deleteCategory(id: Int) {
         viewModelScope.launch {
             repository.deleteCategoryInfo(id)
