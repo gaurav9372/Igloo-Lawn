@@ -107,12 +107,13 @@ fun CategoryDetailPreference(
         apps.filter { app -> !otherCategoryKeys.contains(app.key.toString()) }
     }
 
-    if (showAppPickerModal && categoryEntry != null) {
+    val currentEntry = categoryEntry
+    if (showAppPickerModal && currentEntry != null) {
         CategoryAppSelectionDialog(
-            categoryEntry = categoryEntry,
+            categoryEntry = currentEntry,
             availableApps = availableAppsForCategory,
             onSave = { updatedKeys ->
-                onUpdateCategoryItems(categoryEntry.title, updatedKeys)
+                onUpdateCategoryItems(currentEntry.title, updatedKeys)
                 showAppPickerModal = false
             },
             onDismiss = { showAppPickerModal = false },
@@ -120,7 +121,7 @@ fun CategoryDetailPreference(
     }
 
     LoadingScreen(
-        isLoading = categoryEntry == null,
+        isLoading = currentEntry == null,
         modifier = modifier.fillMaxSize(),
     ) {
         Scaffold(
@@ -180,9 +181,10 @@ fun CategoryDetailPreference(
                                     endWidget = {
                                         IconButton(
                                             onClick = {
-                                                val updatedKeys = categoryEntry.itemComponentKeys
+                                                val cat = categoryEntry ?: return@IconButton
+                                                val updatedKeys = cat.itemComponentKeys
                                                     .filter { it != app.key.toString() }
-                                                onUpdateCategoryItems(categoryEntry.title, updatedKeys)
+                                                onUpdateCategoryItems(cat.title, updatedKeys)
                                             },
                                             shapes = IconButtonDefaults.shapes(),
                                         ) {
