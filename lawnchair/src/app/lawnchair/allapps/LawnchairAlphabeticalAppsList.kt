@@ -128,13 +128,13 @@ class LawnchairAlphabeticalAppsList<T>(
                 }
 
                 if (resolvedApps.isNotEmpty()) {
-                    val folderInfo = FolderInfo().apply {
-                        title = categoryEntry.title
-                        resolvedApps.forEach { add(it) }
-                    }
-                    mAdapterItems.add(AdapterItem.asFolder(folderInfo))
+                    mAdapterItems.add(AdapterItem.asCategoryHeader(categoryEntry.title))
                     position++
-                    resolvedApps.forEach { assignedAppKeys.add(it.toComponentKey().toString()) }
+                    resolvedApps.forEach { appInfo ->
+                        mAdapterItems.add(AdapterItem.asApp(appInfo))
+                        position++
+                        assignedAppKeys.add(appInfo.toComponentKey().toString())
+                    }
                 }
             }
 
@@ -143,12 +143,12 @@ class LawnchairAlphabeticalAppsList<T>(
             }
 
             if (unassignedApps.isNotEmpty()) {
-                val noCategoryFolder = FolderInfo().apply {
-                    title = "No Category"
-                    unassignedApps.forEach { add(it) }
-                }
-                mAdapterItems.add(AdapterItem.asFolder(noCategoryFolder))
+                mAdapterItems.add(AdapterItem.asCategoryHeader("No Category"))
                 position++
+                unassignedApps.forEach { appInfo ->
+                    mAdapterItems.add(AdapterItem.asApp(appInfo))
+                    position++
+                }
             }
             return position
         }

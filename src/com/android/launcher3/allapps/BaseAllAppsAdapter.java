@@ -26,7 +26,9 @@ import static com.android.launcher3.allapps.UserProfileManager.STATE_DISABLED;
 import static com.android.launcher3.allapps.UserProfileManager.STATE_ENABLED;
 
 import android.content.Context;
+import android.graphics.Typeface;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -46,6 +48,7 @@ import com.android.launcher3.allapps.search.SearchAdapterProvider;
 import com.android.launcher3.folder.FolderIcon;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.FolderInfo;
+import com.android.launcher3.util.Themes;
 import com.android.launcher3.views.ActivityContext;
 
 /**
@@ -74,6 +77,7 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
     // LC-Feature: Folder support in All Apps, can be any ID
     public static final int VIEW_TYPE_FOLDER = 1 << 10;
+    public static final int VIEW_TYPE_CATEGORY_HEADER = 1 << 12;
 
     // Common view type masks
     public static final int VIEW_TYPE_MASK_DIVIDER = VIEW_TYPE_ALL_APPS_DIVIDER;
@@ -121,6 +125,7 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
         // LC-Feature: Folder support in All Apps
         public FolderInfo folderInfo = new FolderInfo();
+        public String sectionTitle = "";
 
         /**
          * Factory method for AppIcon AdapterItem
@@ -141,6 +146,12 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         public static AdapterItem asFolder(FolderInfo folderInfo) {
             AdapterItem item = new AdapterItem(VIEW_TYPE_FOLDER);
             item.folderInfo = folderInfo;
+            return item;
+        }
+
+        public static AdapterItem asCategoryHeader(String title) {
+            AdapterItem item = new AdapterItem(VIEW_TYPE_CATEGORY_HEADER);
+            item.sectionTitle = title;
             return item;
         }
 
@@ -268,6 +279,19 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         mActivityContext.getDeviceProfile().getAllAppsProfile().getCellHeightPx()));
                 return new ViewHolder(fl);
+            case VIEW_TYPE_CATEGORY_HEADER:
+                TextView headerView = new TextView(mActivityContext);
+                headerView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                headerView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+                headerView.setTextColor(Themes.getAttrColor(mActivityContext, android.R.attr.textColorPrimary));
+                int paddingHoriz = Themes.pxFromDp(16, mActivityContext.getResources().getDisplayMetrics());
+                int paddingTop = Themes.pxFromDp(20, mActivityContext.getResources().getDisplayMetrics());
+                int paddingBottom = Themes.pxFromDp(8, mActivityContext.getResources().getDisplayMetrics());
+                headerView.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
+                headerView.setLayoutParams(new RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+                return new ViewHolder(headerView);
             default:
                 if (mAdapterProvider.isViewSupported(viewType)) {
                     return mAdapterProvider.onCreateViewHolder(mLayoutInflater, parent, viewType);
@@ -356,6 +380,12 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
             case VIEW_TYPE_WORK_DISABLED_CARD:
                 // nothing to do
                 break;
+            case VIEW_TYPE_CATEGORY_HEADER: {
+                AdapterItem item = mApps.getAdapterItems().get(position);
+                TextView tv = (TextView) holder.itemView;
+                tv.setText(item.sectionTitle);
+                break;
+            }
             case VIEW_TYPE_WORK_EDU_CARD:
                 ((WorkEduCard) holder.itemView).setPosition(position);
                 break;
