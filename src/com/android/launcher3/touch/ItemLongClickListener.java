@@ -32,6 +32,7 @@ import android.view.View.OnLongClickListener;
 import com.android.launcher3.DragSource;
 import com.android.launcher3.DropTarget;
 import com.android.launcher3.Launcher;
+import com.android.launcher3.R;
 import com.android.launcher3.celllayout.CellInfo;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.dragndrop.DragController;
@@ -144,6 +145,10 @@ public class ItemLongClickListener {
         View v = (view instanceof BubbleTextHolder)
                 ? ((BubbleTextHolder) view).getBubbleText()
                 : view;
+        Object categoryId = v.getTag(R.id.item_category_id);
+        if (categoryId instanceof String && !((String) categoryId).isEmpty()) {
+            return true;
+        }
         Launcher launcher = Launcher.getLauncher(v.getContext());
         if (!canStartDrag(launcher)) return false;
         // When we have exited all apps or are in transition, disregard long clicks

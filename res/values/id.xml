@@ -92,6 +92,9 @@
     <item type="id" name="ps_settings_button" />
     <item type="id" name="ps_transition_image" />
 
+    <!-- Category tag for app drawer icons -->
+    <item type="id" name="item_category_id" />
+
     <!-- Recents -->
     <item type="id" name="overview_panel"/>
 

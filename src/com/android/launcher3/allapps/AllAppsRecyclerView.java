@@ -102,6 +102,9 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
      */
     public void setApps(AlphabeticalAppsList<?> apps) {
         mApps = apps;
+        if (mApps instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+            ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList<?>) mApps).setupCategoryTouchHelper(this);
+        }
     }
 
     public AlphabeticalAppsList<?> getApps() {

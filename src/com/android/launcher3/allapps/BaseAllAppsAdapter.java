@@ -117,6 +117,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         public int rowAppIndex;
         // The associated ItemInfoWithIcon for the item
         public AppInfo itemInfo = null;
+        // Associated category ID if part of a user category
+        public String categoryId = null;
         // Private App Decorator
         public SectionDecorationInfo decorationInfo = null;
         public AdapterItem(int viewType) {
@@ -317,6 +319,7 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                                         && privateProfileManager.isPrivateSpaceItem(adapterItem)));
                 icon.setSkipUserBadge(skipUserBadge);
                 icon.applyFromApplicationInfo(adapterItem.itemInfo);
+                icon.setTag(R.id.item_category_id, adapterItem.categoryId);
                 icon.setOnFocusChangeListener(mIconFocusListener);
                 if (privateProfileManager != null) {
                     // Set the alpha of the private space icon to 0 upon expanding the header so the
