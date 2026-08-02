@@ -46,6 +46,7 @@ import app.lawnchair.ui.preferences.components.layout.PreferenceTemplate
 import app.lawnchair.ui.preferences.components.reorderable.ReorderableDragHandle
 import app.lawnchair.ui.preferences.components.reorderable.ReorderablePreferenceGroup
 import app.lawnchair.ui.preferences.navigation.AppDrawerAppListToCategory
+import app.lawnchair.ui.preferences.navigation.AppDrawerCategoryDetail
 import app.lawnchair.ui.util.bottomSheetHandler
 import com.android.launcher3.R
 
@@ -63,8 +64,8 @@ fun AppDrawerCategoriesPreference(
         onCreateCategory = { label ->
             viewModel.createCategory(label)
         },
-        onEditCategoryItems = {
-            navController.navigate(AppDrawerAppListToCategory(it))
+        onOpenCategoryDetail = { categoryId ->
+            navController.navigate(AppDrawerCategoryDetail(categoryId))
         },
         onRenameCategory = { categoryId, newTitle ->
             viewModel.renameCategory(categoryId, newTitle)
@@ -80,7 +81,7 @@ fun AppDrawerCategoriesPreference(
 fun AppDrawerCategoriesPreference(
     categories: List<CategoryEntry>?,
     onCreateCategory: (String) -> Unit,
-    onEditCategoryItems: (Int) -> Unit,
+    onOpenCategoryDetail: (Int) -> Unit,
     onRenameCategory: (Int, String) -> Unit,
     onDeleteCategory: (CategoryEntry) -> Unit,
     modifier: Modifier = Modifier,
@@ -134,21 +135,7 @@ fun AppDrawerCategoriesPreference(
                 CategoryItem(
                     categoryEntry = categoryEntry,
                     onItemClick = {
-                        bottomSheetHandler.show {
-                            CategoryEditSheet(
-                                categoryId = categoryEntry.id,
-                                initialTitle = categoryEntry.title,
-                                itemCount = categoryEntry.itemComponentKeys.size,
-                                onRename = onRenameCategory,
-                                onNavigate = {
-                                    onEditCategoryItems(it)
-                                    bottomSheetHandler.hide()
-                                },
-                                onDismiss = {
-                                    bottomSheetHandler.hide()
-                                },
-                            )
-                        }
+                        onOpenCategoryDetail(categoryEntry.id)
                     },
                     onItemDelete = { categoryToDelete ->
                         onDeleteCategory(categoryToDelete)

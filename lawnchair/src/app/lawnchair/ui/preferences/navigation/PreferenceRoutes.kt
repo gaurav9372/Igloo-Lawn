@@ -166,6 +166,9 @@ data class AppDrawerAppListToFolder(val id: Int) : PreferenceRoute
 @Serializable
 data class AppDrawerAppListToCategory(val id: Int) : PreferenceRoute
 
+@Serializable
+data class AppDrawerCategoryDetail(val id: Int) : PreferenceRoute
+
 // Search section routes
 @Serializable
 data class SearchProviderPreference(val id: SearchProviderId) :
