@@ -19,6 +19,7 @@ import app.lawnchair.util.observeOnce
 import com.android.launcher3.InvariantDeviceProfile.OnIDPChangeListener
 import com.android.launcher3.allapps.AllAppsStore
 import com.android.launcher3.allapps.AlphabeticalAppsList
+import com.android.launcher3.allapps.BaseAllAppsAdapter
 import com.android.launcher3.allapps.BaseAllAppsAdapter.AdapterItem
 import com.android.launcher3.allapps.PrivateProfileManager
 import com.android.launcher3.allapps.WorkProfileManager
