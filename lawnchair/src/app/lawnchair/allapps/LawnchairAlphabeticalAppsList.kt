@@ -201,11 +201,18 @@ class LawnchairAlphabeticalAppsList<T>(
         return position
     }
 
-    fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
-        val callback = AllAppsCategoryTouchHelperCallback(this) { catId, newKeys ->
-            val categoryTitle = categoryList.find { it.id == catId }?.title ?: ""
-            categoryViewModel.updateCategoryItems(catId, categoryTitle, newKeys)
+    fun persistCategoryChanges() {
+        categoryList.forEach { categoryEntry ->
+            val categoryApps = mAdapterItems.filter {
+                it.categoryId == categoryEntry.id.toString() && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
+            }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
+
+            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, categoryApps)
         }
+    }
+
+    fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
+        val callback = AllAppsCategoryTouchHelperCallback(this)
         val helper = androidx.recyclerview.widget.ItemTouchHelper(callback)
         helper.attachToRecyclerView(recyclerView)
         itemTouchHelper = helper

@@ -1835,8 +1835,10 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
             mRecyclerView.setLayoutManager(mLayoutManager);
             mRecyclerView.setAdapter(mAdapter);
             mRecyclerView.setHasFixedSize(true);
-            // No animations will occur when changes occur to the items in this RecyclerView.
-            mRecyclerView.setItemAnimator(null);
+            androidx.recyclerview.widget.DefaultItemAnimator itemAnimator = new androidx.recyclerview.widget.DefaultItemAnimator();
+            itemAnimator.setMoveDuration(250);
+            itemAnimator.setSupportsChangeAnimations(false);
+            mRecyclerView.setItemAnimator(itemAnimator);
             onInitializeRecyclerView(mRecyclerView);
             // Use ViewGroupFocusHelper for SearchRecyclerView to draw focus outline for the
             // buttons in the view (e.g. query builder button and setting button)
