@@ -68,6 +68,11 @@ data class Search(val selectedId: SearchRoute = SearchRoute.DOCK_SEARCH) :
 }
 
 @Serializable
+data object Categories : PreferenceRootRoute, PreferenceDeepLink {
+    override val deepLink = "$URI/categories"
+}
+
+@Serializable
 data object Folders : PreferenceRootRoute, PreferenceDeepLink {
     override val deepLink = "$URI/folders"
 }
@@ -157,6 +162,9 @@ data object AppDrawerFolder : PreferenceRoute, PreferenceDeepLink {
 
 @Serializable
 data class AppDrawerAppListToFolder(val id: Int) : PreferenceRoute
+
+@Serializable
+data class AppDrawerAppListToCategory(val id: Int) : PreferenceRoute
 
 // Search section routes
 @Serializable

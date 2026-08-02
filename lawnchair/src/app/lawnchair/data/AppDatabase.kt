@@ -7,6 +7,9 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteDatabase
+import app.lawnchair.data.category.CategoryInfoEntity
+import app.lawnchair.data.category.CategoryItemEntity
+import app.lawnchair.data.category.service.CategoryDao
 import app.lawnchair.data.folder.FolderInfoEntity
 import app.lawnchair.data.folder.FolderItemEntity
 import app.lawnchair.data.folder.service.FolderDao
@@ -17,18 +20,30 @@ import app.lawnchair.data.wallpaper.service.WallpaperDao
 import app.lawnchair.util.MainThreadInitializedObject
 import kotlinx.coroutines.runBlocking
 
-@Database(entities = [IconOverride::class, Wallpaper::class, FolderInfoEntity::class, FolderItemEntity::class], version = 3)
+@Database(
+    entities = [
+        IconOverride::class,
+        Wallpaper::class,
+        FolderInfoEntity::class,
+        FolderItemEntity::class,
+        CategoryInfoEntity::class,
+        CategoryItemEntity::class,
+    ],
+    version = 4,
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun iconOverrideDao(): IconOverrideDao
     abstract fun wallpaperDao(): WallpaperDao
     abstract fun folderDao(): FolderDao
+    abstract fun categoryDao(): CategoryDao
 
     suspend fun checkpoint() {
         iconOverrideDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
         wallpaperDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
         folderDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
+        categoryDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
     }
 
     fun checkpointSync() {
@@ -89,12 +104,52 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+            CREATE TABLE IF NOT EXISTS `Categories` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `title` TEXT NOT NULL,
+                `hide` INTEGER NOT NULL,
+                `rank` INTEGER NOT NULL,
+                `timestamp` INTEGER NOT NULL
+            )
+                    """.trimIndent(),
+                )
+
+                database.execSQL(
+                    """
+            CREATE TABLE IF NOT EXISTS `CategoryItems` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `categoryId` INTEGER NOT NULL,
+                `rank` INTEGER NOT NULL,
+                `item_info` TEXT,
+                `timestamp` INTEGER NOT NULL,
+                FOREIGN KEY(`categoryId`) REFERENCES `Categories`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+                    """.trimIndent(),
+                )
+
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_CategoryItems_categoryId` ON `CategoryItems` (`categoryId`)",
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_CategoryItems_item_info` ON `CategoryItems` (`item_info`)",
+                )
+            }
+        }
+
         val INSTANCE = MainThreadInitializedObject { context ->
             Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
                 "preferences",
-            ).addMigrations(MIGRATION_1_3).addMigrations(MIGRATION_2_3).build()
+            )
+                .addMigrations(MIGRATION_1_3)
+                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_3_4)
+                .build()
         }
     }
 }

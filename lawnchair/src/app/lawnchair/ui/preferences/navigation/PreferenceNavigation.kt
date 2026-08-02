@@ -25,6 +25,7 @@ import app.lawnchair.ui.preferences.components.colorpreference.ColorPreferenceMo
 import app.lawnchair.ui.preferences.components.colorpreference.ColorSelection
 import app.lawnchair.ui.preferences.components.search.SearchProviderId
 import app.lawnchair.ui.preferences.components.search.SearchProviderPreferenceScreen
+import app.lawnchair.ui.preferences.destinations.AppDrawerCategoriesPreference
 import app.lawnchair.ui.preferences.destinations.AppDrawerFoldersPreference
 import app.lawnchair.ui.preferences.destinations.AppDrawerPreferences
 import app.lawnchair.ui.preferences.destinations.BackupAndRestorePreference
@@ -49,6 +50,7 @@ import app.lawnchair.ui.preferences.destinations.PreferencesDashboard
 import app.lawnchair.ui.preferences.destinations.QuickstepPreferences
 import app.lawnchair.ui.preferences.destinations.SearchPreferences
 import app.lawnchair.ui.preferences.destinations.SearchProviderPreferences
+import app.lawnchair.ui.preferences.destinations.SelectAppsForCategory
 import app.lawnchair.ui.preferences.destinations.SelectAppsForDrawerFolder
 import app.lawnchair.ui.preferences.destinations.SelectIconPreference
 import app.lawnchair.ui.preferences.destinations.ShapePreference
@@ -181,6 +183,14 @@ fun PreferenceNavigation(
         composable<Folders>(
             deepLinks = getDeepLink(Folders),
         ) { FolderPreferences() }
+        composable<Categories>(
+            deepLinks = getDeepLink(Categories),
+        ) { AppDrawerCategoriesPreference() }
+        composable<AppDrawerAppListToCategory> { backStackEntry ->
+            val args = backStackEntry.arguments!!
+            val categoryInfoId = args.getInt("id")
+            SelectAppsForCategory(categoryInfoId)
+        }
 
         composable<Gestures>(
             deepLinks = getDeepLink(Gestures),

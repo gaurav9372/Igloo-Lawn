@@ -78,6 +78,7 @@ import app.lawnchair.ui.preferences.navigation.BackupAndRestore
 import app.lawnchair.ui.preferences.navigation.DebugMenu
 import app.lawnchair.ui.preferences.navigation.Dock
 import app.lawnchair.ui.preferences.navigation.ExperimentalFeatures
+import app.lawnchair.ui.preferences.navigation.Categories
 import app.lawnchair.ui.preferences.navigation.Folders
 import app.lawnchair.ui.preferences.navigation.General
 import app.lawnchair.ui.preferences.navigation.Gestures
@@ -181,6 +182,14 @@ fun PreferencesDashboard(
                 iconResource = R.drawable.ic_search,
                 onNavigate = { onNavigate(Search()) },
                 isSelected = currentRoute is Search,
+            )
+
+            PreferenceCategory(
+                label = stringResource(R.string.categories_label),
+                description = stringResource(R.string.categories_description),
+                iconResource = R.drawable.ic_apps,
+                onNavigate = { onNavigate(Categories) },
+                isSelected = currentRoute is Categories,
             )
 
             PreferenceCategory(
