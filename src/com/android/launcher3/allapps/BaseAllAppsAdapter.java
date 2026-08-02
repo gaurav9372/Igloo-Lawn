@@ -284,9 +284,9 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 headerView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
                 headerView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
                 headerView.setTextColor(Themes.getAttrColor(mActivityContext, android.R.attr.textColorPrimary));
-                int paddingHoriz = Themes.pxFromDp(16, mActivityContext.getResources().getDisplayMetrics());
-                int paddingTop = Themes.pxFromDp(20, mActivityContext.getResources().getDisplayMetrics());
-                int paddingBottom = Themes.pxFromDp(8, mActivityContext.getResources().getDisplayMetrics());
+                int paddingHoriz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
+                int paddingTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, mActivityContext.getResources().getDisplayMetrics());
+                int paddingBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, mActivityContext.getResources().getDisplayMetrics());
                 headerView.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
                 headerView.setLayoutParams(new RecyclerView.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
