@@ -1,16 +1,14 @@
 package app.lawnchair.ui.preferences.destinations
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -18,6 +16,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -38,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,12 +44,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
-import app.lawnchair.ui.ModalBottomSheetContent
 import app.lawnchair.ui.preferences.components.AppItem
 import app.lawnchair.ui.preferences.components.layout.LoadingScreen
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
-import app.lawnchair.ui.util.bottomSheetHandler
 import app.lawnchair.util.App
 import app.lawnchair.util.appsState
 import com.android.launcher3.R
@@ -69,10 +65,12 @@ fun CategoryDetailPreference(
     }
 
     val categoryEntry by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
+    val allCategories by viewModel.categories.collectAsStateWithLifecycle()
     val apps by appsState()
 
     CategoryDetailPreference(
         categoryEntry = categoryEntry,
+        allCategories = allCategories,
         apps = apps,
         onUpdateCategoryItems = { title, componentKeys ->
             viewModel.updateCategoryItems(categoryInfoId, title, componentKeys)
@@ -85,12 +83,13 @@ fun CategoryDetailPreference(
 @Composable
 fun CategoryDetailPreference(
     categoryEntry: CategoryEntry?,
+    allCategories: List<CategoryEntry>?,
     apps: List<App>,
     onUpdateCategoryItems: (title: String, componentKeys: List<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bottomSheetHandler = bottomSheetHandler
     val title = categoryEntry?.title ?: stringResource(id = R.string.categories_label)
+    var showAppPickerModal by remember { mutableStateOf(false) }
 
     val assignedApps = remember(categoryEntry, apps) {
         if (categoryEntry == null) emptyList()
@@ -100,6 +99,26 @@ fun CategoryDetailPreference(
         }
     }
 
+    val availableAppsForCategory = remember(apps, allCategories, categoryEntry) {
+        val currentCategoryId = categoryEntry?.id
+        val otherCategoryKeys = allCategories?.filter { it.id != currentCategoryId }
+            ?.flatMap { it.itemComponentKeys }
+            ?.toSet() ?: emptySet()
+        apps.filter { app -> !otherCategoryKeys.contains(app.key.toString()) }
+    }
+
+    if (showAppPickerModal && categoryEntry != null) {
+        CategoryAppSelectionDialog(
+            categoryEntry = categoryEntry,
+            availableApps = availableAppsForCategory,
+            onSave = { updatedKeys ->
+                onUpdateCategoryItems(categoryEntry.title, updatedKeys)
+                showAppPickerModal = false
+            },
+            onDismiss = { showAppPickerModal = false },
+        )
+    }
+
     LoadingScreen(
         isLoading = categoryEntry == null,
         modifier = modifier.fillMaxSize(),
@@ -107,21 +126,7 @@ fun CategoryDetailPreference(
         Scaffold(
             floatingActionButton = {
                 FloatingActionButton(
-                    onClick = {
-                        bottomSheetHandler.show {
-                            CategoryAppSelectionModal(
-                                categoryEntry = categoryEntry,
-                                apps = apps,
-                                onSave = { updatedKeys ->
-                                    onUpdateCategoryItems(categoryEntry?.title ?: "", updatedKeys)
-                                    bottomSheetHandler.hide()
-                                },
-                                onDismiss = {
-                                    bottomSheetHandler.hide()
-                                },
-                            )
-                        }
-                    },
+                    onClick = { showAppPickerModal = true },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) {
@@ -175,10 +180,9 @@ fun CategoryDetailPreference(
                                     endWidget = {
                                         IconButton(
                                             onClick = {
-                                                val updatedKeys = categoryEntry?.itemComponentKeys
-                                                    ?.filter { it != app.key.toString() }
-                                                    ?: emptyList()
-                                                onUpdateCategoryItems(categoryEntry?.title ?: "", updatedKeys)
+                                                val updatedKeys = categoryEntry.itemComponentKeys
+                                                    .filter { it != app.key.toString() }
+                                                onUpdateCategoryItems(categoryEntry.title, updatedKeys)
                                             },
                                             shapes = IconButtonDefaults.shapes(),
                                         ) {
@@ -201,81 +205,64 @@ fun CategoryDetailPreference(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun CategoryAppSelectionModal(
-    categoryEntry: CategoryEntry?,
-    apps: List<App>,
+fun CategoryAppSelectionDialog(
+    categoryEntry: CategoryEntry,
+    availableApps: List<App>,
     onSave: (List<String>) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedKeys by remember(categoryEntry) {
-        mutableStateOf((categoryEntry?.itemComponentKeys ?: emptyList()).toSet())
+        mutableStateOf(categoryEntry.itemComponentKeys.toSet())
     }
 
-    val filteredApps = remember(apps, searchQuery) {
+    val filteredApps = remember(availableApps, searchQuery) {
         if (searchQuery.isBlank()) {
-            apps
+            availableApps
         } else {
-            apps.filter { it.label.contains(searchQuery, ignoreCase = true) }
+            availableApps.filter { it.label.contains(searchQuery, ignoreCase = true) }
         }
     }
 
-    ModalBottomSheetContent(
-        buttons = {
-            OutlinedButton(
-                onClick = onDismiss,
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Text(stringResource(android.R.string.cancel))
-            }
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = {
-                    onSave(selectedKeys.toList())
-                },
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Text("Done")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "Select Apps",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search apps...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Search",
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Clear,
+                                    contentDescription = "Clear search",
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                )
             }
         },
-        modifier = modifier,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search apps...") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = "Search",
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Clear,
-                                contentDescription = "Clear search",
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
+        text = {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(350.dp),
+                    .heightIn(max = 380.dp),
             ) {
                 items(
                     items = filteredApps,
@@ -308,6 +295,22 @@ fun CategoryAppSelectionModal(
                     )
                 }
             }
-        }
-    }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(selectedKeys.toList()) },
+                shapes = ButtonDefaults.shapes(),
+            ) {
+                Text("Done")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                shapes = ButtonDefaults.shapes(),
+            ) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
