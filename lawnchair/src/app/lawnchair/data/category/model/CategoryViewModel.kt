@@ -72,7 +72,6 @@ class CategoryViewModel(
     fun updateCategoryItems(id: Int, title: String, componentKeys: List<String>) {
         viewModelScope.launch {
             repository.updateCategoryWithItems(id, title, componentKeys)
-            reloadHelper.reloadGrid()
         }
     }
 

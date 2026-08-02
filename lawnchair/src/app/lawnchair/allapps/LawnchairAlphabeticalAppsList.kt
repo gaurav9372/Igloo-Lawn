@@ -203,13 +203,15 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     fun persistCategoryChanges() {
-        categoryList.forEach { categoryEntry ->
+        val updatedList = categoryList.map { categoryEntry ->
             val categoryApps = mAdapterItems.filter {
                 it.categoryId == categoryEntry.id.toString() && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
             }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
 
             categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, categoryApps)
+            categoryEntry.copy(itemComponentKeys = categoryApps)
         }
+        categoryList = updatedList.toMutableList()
     }
 
     fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
