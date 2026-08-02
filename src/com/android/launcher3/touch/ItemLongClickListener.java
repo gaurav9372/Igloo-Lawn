@@ -145,15 +145,37 @@ public class ItemLongClickListener {
         View v = (view instanceof BubbleTextHolder)
                 ? ((BubbleTextHolder) view).getBubbleText()
                 : view;
-        Object categoryId = v.getTag(R.id.item_category_id);
-        if (categoryId instanceof String && !((String) categoryId).isEmpty()) {
-            return true;
-        }
         Launcher launcher = Launcher.getLauncher(v.getContext());
         if (!canStartDrag(launcher)) return false;
         // When we have exited all apps or are in transition, disregard long clicks
         if (!launcher.isInState(ALL_APPS) && !launcher.isInState(OVERVIEW)) return false;
         if (launcher.getWorkspace().isSwitchingState()) return false;
+
+        if (launcher.getAppsView() != null) {
+            com.android.launcher3.allapps.AllAppsRecyclerView rv = launcher.getAppsView().getActiveRecyclerView();
+            if (rv != null && rv.getApps() instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                app.lawnchair.allapps.LawnchairAlphabeticalAppsList<?> lawnchairAppsList =
+                        (app.lawnchair.allapps.LawnchairAlphabeticalAppsList<?>) rv.getApps();
+                if (lawnchairAppsList.getItemTouchHelper() != null) {
+                    androidx.recyclerview.widget.RecyclerView.ViewHolder holder = rv.getChildViewHolder(v);
+                    if (holder == null && v.getParent() instanceof View) {
+                        holder = rv.getChildViewHolder((View) v.getParent());
+                    }
+                    if (holder != null) {
+                        int pos = holder.getBindingAdapterPosition();
+                        if (pos >= 0 && pos < lawnchairAppsList.getAdapterItems().size()) {
+                            com.android.launcher3.allapps.BaseAllAppsAdapter.AdapterItem item =
+                                    lawnchairAppsList.getAdapterItems().get(pos);
+                            if (item.viewType == com.android.launcher3.allapps.BaseAllAppsAdapter.VIEW_TYPE_ICON
+                                    && item.categoryId != null) {
+                                lawnchairAppsList.getItemTouchHelper().startDrag(holder);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         StatsLogger logger = launcher.getStatsLogManager().logger();
         if (v.getTag() instanceof ItemInfo itemInfo) {

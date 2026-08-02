@@ -54,6 +54,7 @@ class LawnchairAlphabeticalAppsList<T>(
     private var folderList = mutableListOf<FolderEntry>()
     private var categoryList = mutableListOf<CategoryEntry>()
     private val filteredList = mutableListOf<AppInfo>()
+    var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
 
     private val folderOrder get() = FolderOrderUtils.stringToIntList(prefs.drawerListOrder.get())
 
@@ -148,7 +149,9 @@ class LawnchairAlphabeticalAppsList<T>(
                 mAdapterItems.add(AdapterItem.asCategoryHeader("No Category"))
                 position++
                 unassignedApps.forEach { appInfo ->
-                    mAdapterItems.add(AdapterItem.asApp(appInfo))
+                    val item = AdapterItem.asApp(appInfo)
+                    item.categoryId = "no_category"
+                    mAdapterItems.add(item)
                     position++
                 }
             }
@@ -205,6 +208,7 @@ class LawnchairAlphabeticalAppsList<T>(
         }
         val helper = androidx.recyclerview.widget.ItemTouchHelper(callback)
         helper.attachToRecyclerView(recyclerView)
+        itemTouchHelper = helper
     }
 
     override fun onIdpChanged(modelPropertiesChanged: Boolean) {
