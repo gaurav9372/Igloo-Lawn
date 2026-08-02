@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import app.lawnchair.data.category.CategoryEntry
+import app.lawnchair.data.category.model.CategoryViewModel
 import app.lawnchair.data.folder.FolderEntry
 import app.lawnchair.data.folder.model.FolderOrderUtils
 import app.lawnchair.data.folder.model.FolderViewModel
@@ -46,7 +48,11 @@ class LawnchairAlphabeticalAppsList<T>(
     private val viewModel = FolderViewModel(
         (context as? ComponentActivity)?.application ?: context.launcher.application,
     )
+    private val categoryViewModel = CategoryViewModel(
+        (context as? ComponentActivity)?.application ?: context.launcher.application,
+    )
     private var folderList = mutableListOf<FolderEntry>()
+    private var categoryList = mutableListOf<CategoryEntry>()
     private val filteredList = mutableListOf<AppInfo>()
 
     private val folderOrder get() = FolderOrderUtils.stringToIntList(prefs.drawerListOrder.get())
@@ -63,6 +69,7 @@ class LawnchairAlphabeticalAppsList<T>(
             Log.w(TAG, "Failed to initialize hidden apps", t)
         }
         observeFolders()
+        observeCategories()
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
@@ -78,6 +85,15 @@ class LawnchairAlphabeticalAppsList<T>(
                         if (index == -1) Int.MAX_VALUE else index
                     }
                     .toMutableList()
+                updateAdapterItems()
+            }
+        }
+    }
+
+    private fun observeCategories() {
+        categoryViewModel.categories.observeOnce(context as LifecycleOwner) { categories ->
+            if (categories != null) {
+                categoryList = categories.toMutableList()
                 updateAdapterItems()
             }
         }
@@ -100,6 +116,42 @@ class LawnchairAlphabeticalAppsList<T>(
 
         // Show app drawer folders only on main profile, to prevent state complexity
         if (isWorkOrPrivateSpace(appList)) return super.addAppsWithSections(appList, position)
+
+        if (categoryList.isNotEmpty()) {
+            val validApps = appList.mapNotNull { it }
+            val assignedAppKeys = mutableSetOf<String>()
+
+            categoryList.forEach { categoryEntry ->
+                val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
+                    val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                    appsStore.getApp(componentKey) as? AppInfo
+                }
+
+                if (resolvedApps.isNotEmpty()) {
+                    val folderInfo = FolderInfo().apply {
+                        title = categoryEntry.title
+                        resolvedApps.forEach { add(it) }
+                    }
+                    mAdapterItems.add(AdapterItem.asFolder(folderInfo))
+                    position++
+                    resolvedApps.forEach { assignedAppKeys.add(it.toComponentKey().toString()) }
+                }
+            }
+
+            val unassignedApps = validApps.filterNot { app ->
+                assignedAppKeys.contains(app.toComponentKey().toString())
+            }
+
+            if (unassignedApps.isNotEmpty()) {
+                val noCategoryFolder = FolderInfo().apply {
+                    title = "No Category"
+                    unassignedApps.forEach { add(it) }
+                }
+                mAdapterItems.add(AdapterItem.asFolder(noCategoryFolder))
+                position++
+            }
+            return position
+        }
 
         if (!drawerListDefault) {
             val validApps = appList.mapNotNull { it }
