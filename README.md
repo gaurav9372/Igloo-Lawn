@@ -1,6 +1,6 @@
 # Igloo Lawn
 
-> A custom, vibe-coded fork of the main [Lawnchair](https://github.com/LawnchairLauncher/lawnchair) launcher for Android, featuring tailored enhancements and creative modifications.
+> A custom, vibe-coded fork of the main [Lawnchair](https://github.com/LawnchairLauncher/lawnchair) launcher for Android, featuring tailored UI/UX enhancements and creative modifications.
 
 ---
 
@@ -8,16 +8,17 @@
 
 **Igloo Lawn** is an enhanced fork of the open-source **Lawnchair** Android launcher (based on Google's Launcher3).
 
-This project incorporates **vibe-coded enhancements**, refined UI polish, and custom modifications while preserving the fast, clean, and highly customizable Pixel Launcher experience.
+This project incorporates **vibe-coded enhancements** crafted with user experience, visual elegance, and intuitive problem-solving at its core. Every modification is designed to improve daily usability while preserving the fast, clean, and highly customizable Pixel Launcher experience.
 
-- **Ideated & Developed by**: [Shreyansh](https://solidbilla.com/about/)
+- **Ideated & Developed by**: [Shreyansh](https://solidbilla.com/about/) — UI/UX Designer & Problem Solver
 - **Upstream Base**: [Lawnchair Launcher](https://github.com/LawnchairLauncher/lawnchair)
 
 ---
 
 ## ✨ Features & Highlights
 
-- 🎨 **Vibe-Coded Enhancements**: Custom tweaks and creative features built for a personalized, aesthetic setup.
+- 🎨 **Designer-Led UI/UX Enhancements**: Thoughtful visual refinements, ergonomic tweaks, and aesthetic micro-details tailored for a seamless experience.
+- 🧩 **User-Centric Problem Solving**: Intuitive solutions designed to eliminate friction points in home screen navigation.
 - 📱 **Pixel Experience**: Material 3 Expressive theming, dynamic wallpaper colors, and flexible icon pack support.
 - 🔍 **Unified Search**: Fast search across apps, contacts, and web results directly from the home screen.
 - ⚡ **Performance & Fluidity**: Lightweight architecture optimized for high refresh rates and fluid gestures.
