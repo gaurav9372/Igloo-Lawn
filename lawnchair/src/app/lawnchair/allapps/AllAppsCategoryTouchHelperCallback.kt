@@ -140,7 +140,7 @@ class AllAppsCategoryTouchHelperCallback(
             val targetCatId = when {
                 toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !toItem.categoryId.isNullOrEmpty() -> toItem.categoryId
                 toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER -> {
-                    val targetCat = list.categoryList.find { it.title == toItem.sectionName }
+                    val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
                     targetCat?.id?.toString() ?: "no_category"
                 }
                 else -> null

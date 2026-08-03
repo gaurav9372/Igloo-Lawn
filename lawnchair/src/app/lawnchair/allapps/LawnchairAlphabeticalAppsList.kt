@@ -5,7 +5,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
 import app.lawnchair.data.folder.FolderEntry
@@ -15,7 +18,6 @@ import app.lawnchair.launcher
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.util.categorizeAppsWithSystemAndGoogle
-import app.lawnchair.util.observeOnce
 import com.android.launcher3.InvariantDeviceProfile.OnIDPChangeListener
 import com.android.launcher3.allapps.AllAppsStore
 import com.android.launcher3.allapps.AlphabeticalAppsList
@@ -53,7 +55,7 @@ class LawnchairAlphabeticalAppsList<T>(
         (context as? ComponentActivity)?.application ?: context.launcher.application,
     )
     private var folderList = mutableListOf<FolderEntry>()
-    private var categoryList = mutableListOf<CategoryEntry>()
+    var categoryList = mutableListOf<CategoryEntry>()
     private val filteredList = mutableListOf<AppInfo>()
     var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
 
@@ -79,7 +81,7 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun observeFolders() {
-        viewModel.folders.observe(context as LifecycleOwner) { folders ->
+        viewModel.folders.observe(context as LifecycleOwner, Observer { folders ->
             if (folders != null) {
                 folderList = folders
                     .sortedBy {
@@ -89,16 +91,16 @@ class LawnchairAlphabeticalAppsList<T>(
                     .toMutableList()
                 updateAdapterItems()
             }
-        }
+        })
     }
 
     private fun observeCategories() {
-        categoryViewModel.categories.observe(context as LifecycleOwner) { categories ->
+        categoryViewModel.categories.observe(context as LifecycleOwner, Observer { categories ->
             if (categories != null) {
                 categoryList = categories.toMutableList()
                 updateAdapterItems()
             }
-        }
+        })
     }
 
     override fun updateItemFilter(itemFilter: Predicate<ItemInfo>?) {
