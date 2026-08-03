@@ -84,13 +84,15 @@ class LawnchairAlphabeticalAppsList<T>(
     private fun observeFolders() {
         viewModel.folders
             .onEach { folders ->
-                folderList = folders
-                    .sortedBy {
-                        val index = folderOrder.indexOf(it.id)
-                        if (index == -1) Int.MAX_VALUE else index
-                    }
-                    .toMutableList()
-                updateAdapterItems()
+                if (folders != null) {
+                    folderList = folders
+                        .sortedBy {
+                            val index = folderOrder.indexOf(it.id)
+                            if (index == -1) Int.MAX_VALUE else index
+                        }
+                        .toMutableList()
+                    updateAdapterItems()
+                }
             }
             .launchIn(context.launcher.lifecycleScope)
     }
@@ -98,8 +100,10 @@ class LawnchairAlphabeticalAppsList<T>(
     private fun observeCategories() {
         categoryViewModel.categories
             .onEach { categories ->
-                categoryList = categories.toMutableList()
-                updateAdapterItems()
+                if (categories != null) {
+                    categoryList = categories.toMutableList()
+                    updateAdapterItems()
+                }
             }
             .launchIn(context.launcher.lifecycleScope)
     }
