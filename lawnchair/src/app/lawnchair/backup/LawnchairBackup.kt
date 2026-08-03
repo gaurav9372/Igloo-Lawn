@@ -35,6 +35,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -167,7 +168,7 @@ class LawnchairBackup(
             db.checkpoint()
             val categoriesWithItems = db.categoryDao().getAllCategoriesWithItems()
             // Read the first (current) snapshot from the flow
-            val categoryList = kotlinx.coroutines.flow.first(categoriesWithItems)
+            val categoryList = categoriesWithItems.first()
             val arr = JSONArray()
             categoryList.sortedBy { it.category.rank }.forEach { categoryWithItems ->
                 val obj = JSONObject()
@@ -194,8 +195,10 @@ class LawnchairBackup(
             val dao = db.categoryDao()
 
             // Clear existing categories (cascade deletes items)
-            val existingCategories = kotlinx.coroutines.flow.first(dao.getAllCategoriesWithItems())
-            existingCategories.forEach { dao.deleteCategory(it.category.id) }
+            val existingCategories = dao.getAllCategoriesWithItems().first()
+            for (existing in existingCategories) {
+                dao.deleteCategory(existing.category.id)
+            }
 
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {
