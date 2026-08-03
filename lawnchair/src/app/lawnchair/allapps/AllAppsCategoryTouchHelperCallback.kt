@@ -1,19 +1,26 @@
 package app.lawnchair.allapps
 
 import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
+import com.android.launcher3.BubbleTextView
 import com.android.launcher3.Launcher
 import com.android.launcher3.allapps.BaseAllAppsAdapter
 import com.android.launcher3.dragndrop.DragOptions
+import com.android.launcher3.popup.PopupContainerWithArrow
+import com.android.launcher3.views.BubbleTextHolder
 
 /**
  * ItemTouchHelper.Callback for in-drawer category drag-and-drop reordering.
  *
- * When the user drags an icon to within [TOP_EDGE_THRESHOLD_DP] dp of the top of the screen,
- * the ItemTouchHelper drag is cancelled and the launcher's native beginDragShared is invoked,
- * allowing the icon to be placed on the home screen — exactly as other launchers behave.
+ * Features:
+ * - Drag and drop to reorder apps within and across categories.
+ * - Drag to top edge of screen to hand off to homescreen.
+ * - Holding icon stationary (~600ms after long-press drag starts) triggers the app icon context menu
+ *   (App info, Uninstall, Customize).
  */
 class AllAppsCategoryTouchHelperCallback(
     private val list: LawnchairAlphabeticalAppsList<*>,
@@ -22,12 +29,23 @@ class AllAppsCategoryTouchHelperCallback(
     private companion object {
         /** Top of screen threshold in dp — drag above this to hand off to homescreen. */
         const val TOP_EDGE_THRESHOLD_DP = 80f
+
+        /** Touch slop in dp — if drag displacement exceeds this, treat as drag and cancel menu timer. */
+        const val DRAG_TOUCH_SLOP_DP = 16f
+
+        /** Delay in ms after long-press drag starts to trigger context menu if held stationary. */
+        const val HOLD_MENU_DELAY_MS = 600L
     }
 
     private var attachedRecyclerView: RecyclerView? = null
     private var pendingHomescreenHandoff = false
     private var draggingView: View? = null
     private var draggingHolder: RecyclerView.ViewHolder? = null
+
+    private val menuHandler = Handler(Looper.getMainLooper())
+    private var menuRunnable: Runnable? = null
+    private var hasMovedBeyondSlop = false
+    private var isMenuShowing = false
 
     override fun isLongPressDragEnabled(): Boolean = true
 
@@ -37,6 +55,7 @@ class AllAppsCategoryTouchHelperCallback(
         recyclerView: RecyclerView,
         viewHolder: RecyclerView.ViewHolder,
     ): Int {
+        attachedRecyclerView = recyclerView
         val pos = viewHolder.bindingAdapterPosition
         val items = list.adapterItems
         if (pos in items.indices) {
@@ -52,20 +71,36 @@ class AllAppsCategoryTouchHelperCallback(
 
     override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
         super.onSelectedChanged(viewHolder, actionState)
+        cancelMenuTimer()
+
         if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
             draggingHolder = viewHolder
             draggingView = viewHolder.itemView
             pendingHomescreenHandoff = false
+            hasMovedBeyondSlop = false
+            isMenuShowing = false
+
             viewHolder.itemView.animate()
                 .scaleX(1.15f)
                 .scaleY(1.15f)
                 .setDuration(150)
                 .start()
             viewHolder.itemView.elevation = 20f
+
+            val itemView = viewHolder.itemView
+            val runnable = Runnable {
+                val rv = attachedRecyclerView ?: return@Runnable
+                if (!hasMovedBeyondSlop && !pendingHomescreenHandoff && !isMenuShowing) {
+                    showIconContextMenu(rv, itemView)
+                }
+            }
+            menuRunnable = runnable
+            menuHandler.postDelayed(runnable, HOLD_MENU_DELAY_MS)
         } else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
             draggingHolder = null
             draggingView = null
             pendingHomescreenHandoff = false
+            hasMovedBeyondSlop = false
         }
     }
 
@@ -74,6 +109,9 @@ class AllAppsCategoryTouchHelperCallback(
         viewHolder: RecyclerView.ViewHolder,
         target: RecyclerView.ViewHolder,
     ): Boolean {
+        hasMovedBeyondSlop = true
+        cancelMenuTimer()
+
         val fromPos = viewHolder.bindingAdapterPosition
         val toPos = target.bindingAdapterPosition
         val items = list.adapterItems
@@ -111,10 +149,19 @@ class AllAppsCategoryTouchHelperCallback(
         super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
 
         if (!isCurrentlyActive || actionState != ItemTouchHelper.ACTION_STATE_DRAG) return
-        if (pendingHomescreenHandoff) return
+        if (pendingHomescreenHandoff || isMenuShowing) return
 
         val itemView = viewHolder.itemView
         val density = itemView.context.resources.displayMetrics.density
+
+        // Check if movement exceeds drag touch slop
+        val distancePx = Math.hypot(dX.toDouble(), dY.toDouble()).toFloat()
+        val slopPx = DRAG_TOUCH_SLOP_DP * density
+        if (distancePx > slopPx) {
+            hasMovedBeyondSlop = true
+            cancelMenuTimer()
+        }
+
         val thresholdPx = TOP_EDGE_THRESHOLD_DP * density
 
         // Compute the top of the dragged icon in screen coordinates
@@ -124,6 +171,7 @@ class AllAppsCategoryTouchHelperCallback(
 
         if (itemScreenTop < thresholdPx) {
             pendingHomescreenHandoff = true
+            cancelMenuTimer()
             // Grab the view reference before clearing so we can start drag on it
             val dragView = itemView
             // Post to next frame so ItemTouchHelper finishes its current draw pass cleanly
@@ -133,12 +181,49 @@ class AllAppsCategoryTouchHelperCallback(
         }
     }
 
+    private fun cancelMenuTimer() {
+        menuRunnable?.let { menuHandler.removeCallbacks(it) }
+        menuRunnable = null
+    }
+
+    private fun showIconContextMenu(recyclerView: RecyclerView, itemView: View) {
+        try {
+            isMenuShowing = true
+            cancelMenuTimer()
+
+            // Reset view visual animation
+            itemView.animate()
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .setDuration(100)
+                .start()
+            itemView.elevation = 0f
+
+            // Cancel ItemTouchHelper drag pass
+            val helper = list.itemTouchHelper
+            helper?.attachToRecyclerView(null)
+            helper?.attachToRecyclerView(recyclerView)
+
+            list.persistCategoryChanges()
+
+            val bubbleTextView = (itemView as? BubbleTextView)
+                ?: (itemView as? BubbleTextHolder)?.bubbleText
+
+            if (bubbleTextView != null) {
+                PopupContainerWithArrow.showForIcon(bubbleTextView)
+            }
+        } catch (e: Exception) {
+            // Silently handle if view is detached
+        }
+    }
+
     /**
      * Cancels the ItemTouchHelper drag and starts the launcher's native beginDragShared,
      * allowing the icon to be placed anywhere on the home screen.
      */
     private fun handOffToHomescreen(recyclerView: RecyclerView, itemView: View) {
         try {
+            cancelMenuTimer()
             val launcher = Launcher.getLauncher(itemView.context)
 
             // Reset item visual state immediately
@@ -170,8 +255,9 @@ class AllAppsCategoryTouchHelperCallback(
 
     override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
         super.clearView(recyclerView, viewHolder)
-        // Only animate back if we didn't already hand off (hand-off resets visuals itself)
-        if (!pendingHomescreenHandoff) {
+        cancelMenuTimer()
+        // Only animate back if we didn't already hand off or show menu (those reset visuals themselves)
+        if (!pendingHomescreenHandoff && !isMenuShowing) {
             viewHolder.itemView.animate()
                 .scaleX(1.0f)
                 .scaleY(1.0f)
