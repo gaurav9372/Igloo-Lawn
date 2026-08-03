@@ -218,8 +218,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
         mOnIconClickListener = v -> {
             if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
-                if (v.getTag() instanceof ItemInfo itemInfo && itemInfo.targetComponent != null) {
-                    String key = new com.android.launcher3.util.ComponentKey(itemInfo.targetComponent, itemInfo.user).toString();
+                if (v.getTag() instanceof ItemInfo itemInfo && itemInfo.getTargetComponent() != null) {
+                    String key = new com.android.launcher3.util.ComponentKey(itemInfo.getTargetComponent(), itemInfo.user).toString();
                     app.lawnchair.allapps.MultiSelectManager.INSTANCE.toggleSelection(key);
                     v.invalidate();
                 }
