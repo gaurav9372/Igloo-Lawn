@@ -33,6 +33,7 @@
     <string name="action_create">Create</string>
     <string name="action_edit">Edit</string>
     <string name="edit_category">Edit Category</string>
+    <string name="multi_select">Multi Select</string>
     <string name="select_category_title">Select Category</string>
     <string name="action_backup">Backup</string>
     <string name="action_restore">Restore</string>

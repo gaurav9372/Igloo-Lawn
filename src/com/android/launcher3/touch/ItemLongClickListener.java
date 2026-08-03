@@ -145,6 +145,14 @@ public class ItemLongClickListener {
         View v = (view instanceof BubbleTextHolder)
                 ? ((BubbleTextHolder) view).getBubbleText()
                 : view;
+        if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
+            if (v.getTag() instanceof ItemInfo itemInfo && itemInfo.targetComponent != null) {
+                String key = new com.android.launcher3.util.ComponentKey(itemInfo.targetComponent, itemInfo.user).toString();
+                app.lawnchair.allapps.MultiSelectManager.INSTANCE.toggleSelection(key);
+                v.invalidate();
+            }
+            return true;
+        }
         Launcher launcher = Launcher.getLauncher(v.getContext());
         if (!canStartDrag(launcher)) return false;
         // When we have exited all apps or are in transition, disregard long clicks

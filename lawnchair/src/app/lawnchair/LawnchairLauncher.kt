@@ -46,6 +46,12 @@ import app.lawnchair.preferences2.firstCached
 import app.lawnchair.root.RootHelperManager
 import app.lawnchair.root.RootNotAvailableException
 import app.lawnchair.theme.ThemeProvider
+import android.view.Gravity
+import android.widget.FrameLayout
+import androidx.compose.ui.platform.ComposeView
+import app.lawnchair.allapps.MultiSelectManager
+import app.lawnchair.allapps.MultiSelectTopBar
+import app.lawnchair.ui.theme.LawnchairTheme
 import app.lawnchair.ui.popup.LauncherOptionsPopup
 import app.lawnchair.ui.popup.LawnchairShortcut
 import app.lawnchair.util.getThemedIconPacksInstalled
@@ -149,12 +155,42 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     private lateinit var colorScheme: ColorScheme
     private var hasBackGesture = false
+    private var multiSelectOverlayView: ComposeView? = null
 
     val gestureController by unsafeLazy { GestureController(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         layoutInflater.factory2 = LawnchairLayoutFactory(this)
         super.onCreate(savedInstanceState)
+
+        lifecycleScope.launch {
+            MultiSelectManager.isMultiSelectActive.collect { active ->
+                if (active) {
+                    if (multiSelectOverlayView == null) {
+                        multiSelectOverlayView = ComposeView(this@LawnchairLauncher).apply {
+                            setContent {
+                                LawnchairTheme {
+                                    MultiSelectTopBar(launcher = this@LawnchairLauncher)
+                                }
+                            }
+                        }
+                        val params = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.WRAP_CONTENT,
+                        ).apply {
+                            gravity = Gravity.TOP
+                        }
+                        dragLayer.addView(multiSelectOverlayView, params)
+                    }
+                } else {
+                    multiSelectOverlayView?.let {
+                        dragLayer.removeView(it)
+                        multiSelectOverlayView = null
+                    }
+                }
+                mAppsView?.activeRecyclerView?.invalidate()
+            }
+        }
 
         prefs.launcherTheme.subscribeChanges(this, ::updateTheme)
         prefs.feedProvider.subscribeChanges(this, defaultOverlay::reconnect)
@@ -267,7 +303,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun getSupportedShortcuts(container: Int): Stream<SystemShortcut.Factory<*>> = Stream.concat(
         super.getSupportedShortcuts(container),
         Stream.concat(
-            Stream.of(LawnchairShortcut.UNINSTALL, LawnchairShortcut.CUSTOMIZE, LawnchairShortcut.EDIT_CATEGORY, LawnchairShortcut.OPEN_IN_STORE),
+            Stream.of(LawnchairShortcut.UNINSTALL, LawnchairShortcut.CUSTOMIZE, LawnchairShortcut.EDIT_CATEGORY, LawnchairShortcut.MULTI_SELECT, LawnchairShortcut.OPEN_IN_STORE),
             if (LawnchairApp.isRecentsEnabled) Stream.of(LawnchairShortcut.PAUSE_APPS) else Stream.empty(),
         ),
     )

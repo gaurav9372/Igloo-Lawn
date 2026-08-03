@@ -923,6 +923,52 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
         super.onDraw(canvas);
         drawDotIfNecessary(canvas);
         drawRunningAppIndicatorIfNecessary(canvas);
+        drawSelectionBadgeIfNecessary(canvas);
+    }
+
+    protected void drawSelectionBadgeIfNecessary(Canvas canvas) {
+        if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
+            if (getTag() instanceof ItemInfo itemInfo && itemInfo.targetComponent != null) {
+                String key = new com.android.launcher3.util.ComponentKey(itemInfo.targetComponent, itemInfo.user).toString();
+                boolean isSelected = app.lawnchair.allapps.MultiSelectManager.INSTANCE.isSelected(key);
+
+                Rect iconBounds = new Rect();
+                getIconBounds(iconBounds);
+                final int scrollX = getScrollX();
+                final int scrollY = getScrollY();
+                canvas.translate(scrollX, scrollY);
+
+                float density = getResources().getDisplayMetrics().density;
+                float cx = iconBounds.right - 6 * density;
+                float cy = iconBounds.top + 6 * density;
+                float radius = 10 * density;
+
+                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                if (isSelected) {
+                    paint.setColor(com.android.launcher3.util.Themes.getAttrColor(getContext(), android.R.attr.colorAccent));
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(cx, cy, radius, paint);
+
+                    paint.setColor(android.graphics.Color.WHITE);
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(2.2f * density);
+                    paint.setStrokeCap(Paint.Cap.ROUND);
+                    paint.setStrokeJoin(Paint.Join.ROUND);
+
+                    Path checkPath = new Path();
+                    checkPath.moveTo(cx - radius * 0.4f, cy);
+                    checkPath.lineTo(cx - radius * 0.1f, cy + radius * 0.35f);
+                    checkPath.lineTo(cx + radius * 0.45f, cy - radius * 0.3f);
+                    canvas.drawPath(checkPath, paint);
+                } else {
+                    paint.setColor(0xAA888888);
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(1.8f * density);
+                    canvas.drawCircle(cx, cy, radius, paint);
+                }
+                canvas.translate(-scrollX, -scrollY);
+            }
+        }
     }
 
     /**

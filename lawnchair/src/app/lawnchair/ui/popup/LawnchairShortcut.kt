@@ -81,6 +81,16 @@ class LawnchairShortcut {
                 }
             }
 
+        val MULTI_SELECT =
+            SystemShortcut.Factory { activity: LawnchairLauncher, itemInfo, originalView ->
+                val prefs2 = PreferenceManager2.getInstance(activity)
+                if (prefs2.lockHomeScreen.firstCached()) {
+                    null
+                } else {
+                    getAppInfo(activity, itemInfo)?.let { MultiSelect(activity, it, itemInfo, originalView) }
+                }
+            }
+
         private fun getAppInfo(launcher: LawnchairLauncher, itemInfo: ItemInfo): ModelAppInfo? {
             if (itemInfo is ModelAppInfo) return itemInfo
             if (itemInfo.itemType != ITEM_TYPE_APPLICATION) return null
@@ -213,6 +223,21 @@ class LawnchairShortcut {
                     onClose = { close(true) },
                 )
             }
+        }
+    }
+
+    class MultiSelect(
+        private val launcher: LawnchairLauncher,
+        private val appInfo: ModelAppInfo,
+        itemInfo: ItemInfo,
+        originalView: View,
+    ) : SystemShortcut<LawnchairLauncher>(R.drawable.ic_touch, R.string.multi_select, launcher, itemInfo, originalView) {
+
+        override fun onClick(v: View) {
+            AbstractFloatingView.closeAllOpenViews(launcher)
+            val componentKeyString = appInfo.toComponentKey().toString()
+            app.lawnchair.allapps.MultiSelectManager.startMultiSelect(componentKeyString)
+            launcher.appsView?.getActiveRecyclerView()?.invalidate()
         }
     }
 
@@ -429,6 +454,70 @@ fun SelectCategorySheet(
                         scope.launch {
                             categoryService.moveAppToCategory(componentKeyString, category.id)
                             Toast.makeText(context, "Moved to ${category.title}", Toast.LENGTH_SHORT).show()
+                            onClose()
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BatchSelectCategorySheet(
+    selectedKeys: List<String>,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val categoryService = remember { CategoryService.INSTANCE.get(context) }
+    val categories by categoryService.getCategoriesFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.select_category_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            text = "Moving ${selectedKeys.size} apps",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+
+        LazyColumn {
+            item {
+                ClickablePreference(
+                    label = "No Category",
+                    subtitle = "Remove from categories",
+                    onClick = {
+                        scope.launch {
+                            selectedKeys.forEach { keyStr ->
+                                categoryService.moveAppToCategory(keyStr, 0)
+                            }
+                            Toast.makeText(context, "Moved ${selectedKeys.size} apps to No Category", Toast.LENGTH_SHORT).show()
+                            onClose()
+                        }
+                    },
+                )
+            }
+            items(categories) { category ->
+                val count = category.itemComponentKeys.size
+                ClickablePreference(
+                    label = category.title,
+                    subtitle = "$count apps currently",
+                    onClick = {
+                        scope.launch {
+                            selectedKeys.forEach { keyStr ->
+                                categoryService.moveAppToCategory(keyStr, category.id)
+                            }
+                            Toast.makeText(context, "Moved ${selectedKeys.size} apps to ${category.title}", Toast.LENGTH_SHORT).show()
                             onClose()
                         }
                     },

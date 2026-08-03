@@ -215,7 +215,17 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         mApps = apps;
         mLayoutInflater = inflater;
 
-        mOnIconClickListener = mActivityContext.getItemOnClickListener();
+        mOnIconClickListener = v -> {
+            if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
+                if (v.getTag() instanceof ItemInfo itemInfo && itemInfo.targetComponent != null) {
+                    String key = new com.android.launcher3.util.ComponentKey(itemInfo.targetComponent, itemInfo.user).toString();
+                    app.lawnchair.allapps.MultiSelectManager.INSTANCE.toggleSelection(key);
+                    v.invalidate();
+                }
+                return;
+            }
+            mActivityContext.getItemOnClickListener().onClick(v);
+        };
         mOnIconLongClickListener = mActivityContext.getAllAppsItemLongClickListener();
 
         mAdapterProvider = adapterProvider;
