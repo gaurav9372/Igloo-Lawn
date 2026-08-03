@@ -31,9 +31,12 @@
     <string name="app_drawer_category">App Drawer Categories</string>
 
     <string name="action_create">Create</string>
+    <string name="action_edit">Edit</string>
     <string name="action_backup">Backup</string>
     <string name="action_restore">Restore</string>
     <string name="action_delete">Delete</string>
+    <string name="delete_category_title">Delete Category</string>
+    <string name="delete_category_confirmation">Are you sure you want to delete \"%1$s\"? It contains %2$d app(s).</string>
     <string name="action_reset">Reset</string>
 
     <string name="action_unlock">Unlock</string>

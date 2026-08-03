@@ -1,6 +1,7 @@
 package app.lawnchair.ui.preferences.destinations
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,8 +11,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,6 +98,7 @@ fun AppDrawerCategoriesPreference(
 ) {
     val bottomSheetHandler = bottomSheetHandler
     val displayList = categories ?: emptyList()
+    var categoryToDeletePending by remember { mutableStateOf<CategoryEntry?>(null) }
 
     LoadingScreen(
         isLoading = categories == null,
@@ -143,8 +150,27 @@ fun AppDrawerCategoriesPreference(
                     onItemClick = {
                         onOpenCategoryDetail(categoryEntry.id)
                     },
+                    onItemEdit = { categoryToEdit ->
+                        bottomSheetHandler.show {
+                            CategoryEditSheet(
+                                categoryId = categoryToEdit.id,
+                                initialTitle = categoryToEdit.title,
+                                itemCount = categoryToEdit.itemComponentKeys.size,
+                                onRename = { id, title -> onRenameCategory(id, title) },
+                                onNavigate = {},
+                                onDismiss = {
+                                    bottomSheetHandler.hide()
+                                },
+                                hideAppPicker = true,
+                            )
+                        }
+                    },
                     onItemDelete = { categoryToDelete ->
-                        onDeleteCategory(categoryToDelete)
+                        if (categoryToDelete.itemComponentKeys.isNotEmpty()) {
+                            categoryToDeletePending = categoryToDelete
+                        } else {
+                            onDeleteCategory(categoryToDelete)
+                        }
                     },
                     dragIndicator = {
                         ReorderableDragHandle(
@@ -156,6 +182,47 @@ fun AppDrawerCategoriesPreference(
                 )
             }
         }
+    }
+
+    categoryToDeletePending?.let { category ->
+        AlertDialog(
+            onDismissRequest = { categoryToDeletePending = null },
+            title = {
+                Text(text = stringResource(id = R.string.delete_category_title))
+            },
+            text = {
+                Text(
+                    text = stringResource(
+                        id = R.string.delete_category_confirmation,
+                        category.title,
+                        category.itemComponentKeys.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteCategory(category)
+                        categoryToDeletePending = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+                    shapes = ButtonDefaults.shapes(),
+                ) {
+                    Text(text = stringResource(id = R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { categoryToDeletePending = null },
+                    shapes = ButtonDefaults.shapes(),
+                ) {
+                    Text(text = stringResource(id = android.R.string.cancel))
+                }
+            },
+        )
     }
 }
 
@@ -234,12 +301,15 @@ fun CategoryEditSheet(
 fun CategoryItem(
     categoryEntry: CategoryEntry,
     onItemClick: (CategoryEntry) -> Unit,
+    onItemEdit: (CategoryEntry) -> Unit,
     onItemDelete: (CategoryEntry) -> Unit,
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     dragIndicator: @Composable () -> Unit = {},
 ) {
     val resources = LocalResources.current
+    var showMenu by remember { mutableStateOf(false) }
+
     PreferenceTemplate(
         title = {
             Text(
@@ -260,17 +330,52 @@ fun CategoryItem(
             dragIndicator()
         },
         endWidget = {
-            Row {
+            Box {
                 IconButton(
-                    onClick = {
-                        onItemDelete(categoryEntry)
-                    },
+                    onClick = { showMenu = true },
                     shapes = IconButtonDefaults.shapes(),
                 ) {
                     Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = "Delete",
+                        Icons.Rounded.MoreVert,
+                        contentDescription = "Options",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(id = R.string.action_edit)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onItemEdit(categoryEntry)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(id = R.string.action_delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onItemDelete(categoryEntry)
+                        },
                     )
                 }
             }
