@@ -5,9 +5,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
@@ -81,8 +82,8 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun observeFolders() {
-        viewModel.folders.observe(context as LifecycleOwner, Observer { folders ->
-            if (folders != null) {
+        viewModel.folders
+            .onEach { folders ->
                 folderList = folders
                     .sortedBy {
                         val index = folderOrder.indexOf(it.id)
@@ -91,16 +92,16 @@ class LawnchairAlphabeticalAppsList<T>(
                     .toMutableList()
                 updateAdapterItems()
             }
-        })
+            .launchIn(context.launcher.lifecycleScope)
     }
 
     private fun observeCategories() {
-        categoryViewModel.categories.observe(context as LifecycleOwner, Observer { categories ->
-            if (categories != null) {
+        categoryViewModel.categories
+            .onEach { categories ->
                 categoryList = categories.toMutableList()
                 updateAdapterItems()
             }
-        })
+            .launchIn(context.launcher.lifecycleScope)
     }
 
     override fun updateItemFilter(itemFilter: Predicate<ItemInfo>?) {
