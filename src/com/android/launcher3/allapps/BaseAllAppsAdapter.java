@@ -29,6 +29,7 @@ import android.content.Context;
 import android.graphics.Typeface;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -36,6 +37,7 @@ import android.view.View.OnFocusChangeListener;
 import android.view.View.OnLongClickListener;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -151,10 +153,17 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
             return item;
         }
 
-        public static AdapterItem asCategoryHeader(String title) {
+        public int categoryAppCount = -1;
+
+        public static AdapterItem asCategoryHeader(String title, int count) {
             AdapterItem item = new AdapterItem(VIEW_TYPE_CATEGORY_HEADER);
             item.sectionTitle = title;
+            item.categoryAppCount = count;
             return item;
+        }
+
+        public static AdapterItem asCategoryHeader(String title) {
+            return asCategoryHeader(title, -1);
         }
 
         protected boolean isCountedForAccessibility() {
@@ -281,19 +290,41 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         mActivityContext.getDeviceProfile().getAllAppsProfile().getCellHeightPx()));
                 return new ViewHolder(fl);
-            case VIEW_TYPE_CATEGORY_HEADER:
-                TextView headerView = new TextView(mActivityContext);
-                headerView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-                headerView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-                headerView.setTextColor(Themes.getAttrColor(mActivityContext, android.R.attr.textColorPrimary));
+            case VIEW_TYPE_CATEGORY_HEADER: {
+                LinearLayout headerLayout = new LinearLayout(mActivityContext);
+                headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+                headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+                headerLayout.setLayoutParams(new RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+
                 int paddingHoriz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
                 int paddingTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, mActivityContext.getResources().getDisplayMetrics());
                 int paddingBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, mActivityContext.getResources().getDisplayMetrics());
-                headerView.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
-                headerView.setLayoutParams(new RecyclerView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT));
-                return new ViewHolder(headerView);
+                headerLayout.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
+
+                TextView titleView = new TextView(mActivityContext);
+                titleView.setId(R.id.category_header_title);
+                titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+                titleView.setTextColor(Themes.getAttrColor(mActivityContext, android.R.attr.textColorPrimary));
+                LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+                titleView.setLayoutParams(titleParams);
+
+                TextView countView = new TextView(mActivityContext);
+                countView.setId(R.id.category_header_count);
+                countView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+                countView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                countView.setTextColor(Themes.getAttrColor(mActivityContext, android.R.attr.textColorSecondary));
+                LinearLayout.LayoutParams countParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                countView.setLayoutParams(countParams);
+
+                headerLayout.addView(titleView);
+                headerLayout.addView(countView);
+                return new ViewHolder(headerLayout);
+            }
             default:
                 if (mAdapterProvider.isViewSupported(viewType)) {
                     return mAdapterProvider.onCreateViewHolder(mLayoutInflater, parent, viewType);
@@ -385,8 +416,22 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 break;
             case VIEW_TYPE_CATEGORY_HEADER: {
                 AdapterItem item = mApps.getAdapterItems().get(position);
-                TextView tv = (TextView) holder.itemView;
-                tv.setText(item.sectionTitle);
+                ViewGroup headerLayout = (ViewGroup) holder.itemView;
+                TextView tvTitle = headerLayout.findViewById(R.id.category_header_title);
+                TextView tvCount = headerLayout.findViewById(R.id.category_header_count);
+
+                if (tvTitle != null) {
+                    tvTitle.setText(item.sectionTitle);
+                }
+                if (tvCount != null) {
+                    if (item.categoryAppCount >= 0) {
+                        String countText = item.categoryAppCount == 1 ? "1 app" : item.categoryAppCount + " apps";
+                        tvCount.setText(countText);
+                        tvCount.setVisibility(View.VISIBLE);
+                    } else {
+                        tvCount.setVisibility(View.GONE);
+                    }
+                }
                 break;
             }
             case VIEW_TYPE_WORK_EDU_CARD:

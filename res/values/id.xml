@@ -94,6 +94,8 @@
 
     <!-- Category tag for app drawer icons -->
     <item type="id" name="item_category_id" />
+    <item type="id" name="category_header_title" />
+    <item type="id" name="category_header_count" />
 
     <!-- Recents -->
     <item type="id" name="overview_panel"/>

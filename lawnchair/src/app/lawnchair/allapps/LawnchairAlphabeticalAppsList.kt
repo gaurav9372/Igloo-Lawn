@@ -130,7 +130,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 }
 
                 if (resolvedApps.isNotEmpty()) {
-                    mAdapterItems.add(AdapterItem.asCategoryHeader(categoryEntry.title))
+                    mAdapterItems.add(AdapterItem.asCategoryHeader(categoryEntry.title, resolvedApps.size))
                     position++
                     resolvedApps.forEach { appInfo ->
                         val item = AdapterItem.asApp(appInfo)
@@ -147,7 +147,7 @@ class LawnchairAlphabeticalAppsList<T>(
             }
 
             if (unassignedApps.isNotEmpty()) {
-                mAdapterItems.add(AdapterItem.asCategoryHeader("No Category"))
+                mAdapterItems.add(AdapterItem.asCategoryHeader("No Category", unassignedApps.size))
                 position++
                 unassignedApps.forEach { appInfo ->
                     val item = AdapterItem.asApp(appInfo)
