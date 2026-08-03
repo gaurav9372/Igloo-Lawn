@@ -194,6 +194,13 @@ fun ColumnScope.RestoreBackupOptions(
             label = stringResource(id = R.string.backup_content_wallpaper),
             enabled = backupContents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER),
         )
+        FlagSwitchPreference(
+            flags = contents,
+            setFlags = viewModel::setBackupContents,
+            mask = LawnchairBackup.INCLUDE_CATEGORIES,
+            label = stringResource(id = R.string.backup_content_categories),
+            enabled = backupContents.hasFlag(LawnchairBackup.INCLUDE_CATEGORIES),
+        )
     }
     Box(
         modifier = Modifier

@@ -39,7 +39,7 @@ class CreateBackupViewModel(
 
     val backupContents = savedStateHandle.getStateFlow(
         "contents",
-        LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS or LawnchairBackup.INCLUDE_WALLPAPER,
+        LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS or LawnchairBackup.INCLUDE_WALLPAPER or LawnchairBackup.INCLUDE_CATEGORIES,
     )
 
     init {

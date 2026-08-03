@@ -8,6 +8,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.graphics.drawable.toBitmap
 import app.lawnchair.LawnchairProto.BackupInfo
+import app.lawnchair.data.AppDatabase
+import app.lawnchair.data.category.CategoryInfoEntity
+import app.lawnchair.data.category.CategoryItemEntity
 import app.lawnchair.util.hasFlag
 import app.lawnchair.util.scaleDownTo
 import app.lawnchair.util.scaleDownToDisplaySize
@@ -33,6 +36,8 @@ import java.util.zip.ZipOutputStream
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 class LawnchairBackup(
     private val context: Context,
@@ -77,6 +82,12 @@ class LawnchairBackup(
                 wallpaperManager.setBitmap(BitmapFactory.decodeStream(it))
             }
         }
+        if (contents.hasFlag(INCLUDE_CATEGORIES)) {
+            handlers[CATEGORIES_FILE_NAME] = { inputStream ->
+                val jsonStr = inputStream.bufferedReader().readText()
+                restoreCategoriesFromJson(context, jsonStr)
+            }
+        }
         context.getDatabasePath(LAUNCHER_DB_FILE_NAME).parentFile?.deleteRecursively()
         DeviceGridState(info.gridState).writeToPrefs(context, true)
         readZip(handlers)
@@ -114,9 +125,11 @@ class LawnchairBackup(
         const val SCREENSHOT_FILE_NAME = "screenshot.png"
         const val LAUNCHER_DB_FILE_NAME = "launcher.db"
         const val RESTORED_DB_FILE_NAME = "restored.db"
+        const val CATEGORIES_FILE_NAME = "categories.json"
 
         const val INCLUDE_LAYOUT_AND_SETTINGS = 1 shl 0
         const val INCLUDE_WALLPAPER = 1 shl 1
+        const val INCLUDE_CATEGORIES = 1 shl 2
 
         const val MIME_TYPE = "application/zip"
         val EXTRA_MIME_TYPES = arrayOf(MIME_TYPE, "application/x-zip", "application/octet-stream")
@@ -124,6 +137,7 @@ class LawnchairBackup(
         val contentOptions = listOf(
             INCLUDE_LAYOUT_AND_SETTINGS to R.string.backup_content_layout_and_settings,
             INCLUDE_WALLPAPER to R.string.backup_content_wallpaper,
+            INCLUDE_CATEGORIES to R.string.backup_content_categories,
         )
 
         fun generateBackupFileName(): String {
@@ -138,6 +152,80 @@ class LawnchairBackup(
                 PREFS_DB_FILE_NAME to prefsDbFile(context),
                 PREFS_DATASTORE_FILE_NAME to prefsDataStoreFile(context),
             )
+        }
+
+        /**
+         * Serializes all categories (with their ordered app component keys) to JSON.
+         * Format:
+         * [
+         *   { "rank": 0, "title": "Games", "hide": false, "apps": ["pkg/cls", ...] },
+         *   ...
+         * ]
+         */
+        suspend fun buildCategoriesJson(context: Context): String = withContext(Dispatchers.IO) {
+            val db = AppDatabase.INSTANCE.get(context)
+            db.checkpoint()
+            val categoriesWithItems = db.categoryDao().getAllCategoriesWithItems()
+            // Read the first (current) snapshot from the flow
+            val categoryList = kotlinx.coroutines.flow.first(categoriesWithItems)
+            val arr = JSONArray()
+            categoryList.sortedBy { it.category.rank }.forEach { categoryWithItems ->
+                val obj = JSONObject()
+                obj.put("rank", categoryWithItems.category.rank)
+                obj.put("title", categoryWithItems.category.title)
+                obj.put("hide", categoryWithItems.category.hide)
+                val appsArr = JSONArray()
+                categoryWithItems.items
+                    .sortedBy { it.rank }
+                    .mapNotNull { it.componentKey }
+                    .forEach { appsArr.put(it) }
+                obj.put("apps", appsArr)
+                arr.put(obj)
+            }
+            arr.toString()
+        }
+
+        /**
+         * Restores categories from a JSON string into the AppDatabase.
+         * Clears all existing categories first, then inserts the backed-up ones.
+         */
+        suspend fun restoreCategoriesFromJson(context: Context, json: String) = withContext(Dispatchers.IO) {
+            val db = AppDatabase.INSTANCE.get(context)
+            val dao = db.categoryDao()
+
+            // Clear existing categories (cascade deletes items)
+            val existingCategories = kotlinx.coroutines.flow.first(dao.getAllCategoriesWithItems())
+            existingCategories.forEach { dao.deleteCategory(it.category.id) }
+
+            val arr = JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val rank = obj.optInt("rank", i)
+                val title = obj.optString("title", "Category ${i + 1}")
+                val hide = obj.optBoolean("hide", false)
+                val appsArr = obj.optJSONArray("apps") ?: JSONArray()
+
+                // Insert category and get the new auto-generated ID
+                val newCategoryId = dao.insertCategory(
+                    CategoryInfoEntity(
+                        title = title,
+                        hide = hide,
+                        rank = rank,
+                    ),
+                ).toInt()
+
+                // Insert all category items in order
+                val items = (0 until appsArr.length()).map { j ->
+                    CategoryItemEntity(
+                        categoryId = newCategoryId,
+                        rank = j,
+                        componentKey = appsArr.getString(j),
+                    )
+                }
+                if (items.isNotEmpty()) {
+                    dao.insertCategoryItems(items)
+                }
+            }
         }
 
         @SuppressLint("MissingPermission")
@@ -157,6 +245,11 @@ class LawnchairBackup(
                 .setPreviewHeight(screenshotBitmap.height)
                 .setPreviewDarkText(wallpaperSupportsDarkText)
                 .build()
+
+            // Pre-serialize categories before opening the output stream
+            val categoriesJson = if (contents.hasFlag(INCLUDE_CATEGORIES)) {
+                buildCategoriesJson(context)
+            } else null
 
             val pfd = context.contentResolver.openFileDescriptor(fileUri, "w")!!
             withContext(Dispatchers.IO) {
@@ -182,6 +275,11 @@ class LawnchairBackup(
                             if (!it.value.exists()) return@forEach
                             out.putNextEntry(ZipEntry(it.key))
                             it.value.inputStream().copyTo(out)
+                        }
+
+                        if (categoriesJson != null) {
+                            out.putNextEntry(ZipEntry(CATEGORIES_FILE_NAME))
+                            out.write(categoriesJson.toByteArray(Charsets.UTF_8))
                         }
                     }
                 }
