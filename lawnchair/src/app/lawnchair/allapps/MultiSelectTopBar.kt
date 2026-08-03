@@ -138,7 +138,7 @@ private fun uninstallSelectedApps(context: Context, selectedKeys: Set<String>) {
     selectedKeys.forEach { keyStr ->
         val componentKey = ComponentKey.fromString(keyStr) ?: return@forEach
         val packageName = componentKey.componentName.packageName
-        if (!ApplicationInfoWrapper(context, packageName, componentKey.user).isSystem) {
+        if (!ApplicationInfoWrapper(context, packageName, componentKey.user).isSystem()) {
             val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
             context.startActivity(intent)
         }
