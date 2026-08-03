@@ -49,17 +49,15 @@ class CategoryService(context: Context) {
     }
 
     suspend fun moveAppToCategory(componentKeyString: String, targetCategoryId: Int) = withContext(Dispatchers.IO) {
-        categoryDao.removeComponentKeysFromAllCategories(listOf(componentKeyString))
-        if (targetCategoryId > 0) {
-            val items = listOf(
-                CategoryItemEntity(
-                    categoryId = targetCategoryId,
-                    rank = 9999,
-                    componentKey = componentKeyString,
-                ),
-            )
-            categoryDao.insertCategoryItems(items)
-        }
+        categoryDao.moveAppsToCategory(listOf(componentKeyString), targetCategoryId)
+    }
+
+    suspend fun moveAppsToCategory(componentKeyStrings: List<String>, targetCategoryId: Int) = withContext(Dispatchers.IO) {
+        categoryDao.moveAppsToCategory(componentKeyStrings, targetCategoryId)
+    }
+
+    suspend fun removeComponentKeysFromAllCategories(componentKeys: List<String>) = withContext(Dispatchers.IO) {
+        categoryDao.removeComponentKeysFromAllCategories(componentKeys)
     }
 
     private fun CategoryWithItems.toCategoryEntry() = CategoryEntry(

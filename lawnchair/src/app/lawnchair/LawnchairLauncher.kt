@@ -198,6 +198,13 @@ class LawnchairLauncher : QuickstepLauncher() {
             defaultOverlay.setEnableFeed(enable)
         }.launchIn(scope = lifecycleScope)
         launcher.stateManager.addStateListener(clearSearchStateListener)
+        launcher.stateManager.addStateListener(object : StateManager.StateListener<LauncherState> {
+            override fun onStateTransitionComplete(finalState: LauncherState) {
+                if (finalState != LauncherState.ALL_APPS) {
+                    MultiSelectManager.exitMultiSelect()
+                }
+            }
+        })
 
         if (prefs.autoLaunchRoot.get()) {
             lifecycleScope.launch {
@@ -307,6 +314,14 @@ class LawnchairLauncher : QuickstepLauncher() {
             if (LawnchairApp.isRecentsEnabled) Stream.of(LawnchairShortcut.PAUSE_APPS) else Stream.empty(),
         ),
     )
+
+    override fun onBackPressed() {
+        if (MultiSelectManager.isMultiSelectActive.value) {
+            MultiSelectManager.exitMultiSelect()
+            return
+        }
+        super.onBackPressed()
+    }
 
     fun updateTheme() {
         if (themeProvider.colorScheme != colorScheme) {

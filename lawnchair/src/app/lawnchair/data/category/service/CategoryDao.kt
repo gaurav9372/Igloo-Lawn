@@ -69,7 +69,32 @@ interface CategoryDao {
     }
 
     @Query("DELETE FROM Categories WHERE id = :categoryId")
-    suspend fun deleteCategory(categoryId: Int)
+    suspend fun deleteCategoryById(categoryId: Int)
+
+    @Transaction
+    suspend fun deleteCategory(categoryId: Int) {
+        deleteCategoryItemsByCategoryId(categoryId)
+        deleteCategoryById(categoryId)
+    }
+
+    @Query("SELECT MAX(rank) FROM CategoryItems WHERE categoryId = :categoryId")
+    suspend fun getMaxRank(categoryId: Int): Int?
+
+    @Transaction
+    suspend fun moveAppsToCategory(componentKeys: List<String>, targetCategoryId: Int) {
+        removeComponentKeysFromAllCategories(componentKeys)
+        if (targetCategoryId > 0) {
+            val startRank = (getMaxRank(targetCategoryId) ?: 0) + 1
+            val items = componentKeys.mapIndexed { index, key ->
+                CategoryItemEntity(
+                    categoryId = targetCategoryId,
+                    rank = startRank + index,
+                    componentKey = key,
+                )
+            }
+            insertCategoryItems(items)
+        }
+    }
 
     @RawQuery
     suspend fun checkpoint(supportSQLiteQuery: SupportSQLiteQuery): Int

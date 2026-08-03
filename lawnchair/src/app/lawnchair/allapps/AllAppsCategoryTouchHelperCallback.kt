@@ -55,7 +55,22 @@ class AllAppsCategoryTouchHelperCallback(
         recyclerView: RecyclerView,
         viewHolder: RecyclerView.ViewHolder,
     ): Int {
-        attachedRecyclerView = recyclerView
+        if (attachedRecyclerView != recyclerView) {
+            attachedRecyclerView = recyclerView
+            recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                    if (dy != 0 || dx != 0) {
+                        hasMovedBeyondSlop = true
+                        cancelMenuTimer()
+                    }
+                }
+            })
+        }
+        val launcher = Launcher.getLauncher(recyclerView.context)
+        if (launcher.appsView != null && launcher.appsView.isSearching) {
+            return makeMovementFlags(0, 0)
+        }
+
         val pos = viewHolder.bindingAdapterPosition
         val items = list.adapterItems
         if (pos in items.indices) {
@@ -121,18 +136,24 @@ class AllAppsCategoryTouchHelperCallback(
         val fromItem = items[fromPos]
         val toItem = items[toPos]
 
-        if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
-            toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
-            !fromItem.categoryId.isNullOrEmpty() &&
-            !toItem.categoryId.isNullOrEmpty()
-        ) {
-            if (fromItem.categoryId != toItem.categoryId) {
-                fromItem.categoryId = toItem.categoryId
+        if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !fromItem.categoryId.isNullOrEmpty()) {
+            val targetCatId = when {
+                toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !toItem.categoryId.isNullOrEmpty() -> toItem.categoryId
+                toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER -> {
+                    val targetCat = list.categoryList.find { it.title == toItem.sectionName }
+                    targetCat?.id?.toString() ?: "no_category"
+                }
+                else -> null
             }
-            items.removeAt(fromPos)
-            items.add(toPos, fromItem)
-            recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
-            return true
+            if (targetCatId != null) {
+                if (fromItem.categoryId != targetCatId) {
+                    fromItem.categoryId = targetCatId
+                }
+                items.removeAt(fromPos)
+                items.add(toPos, fromItem)
+                recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
+                return true
+            }
         }
         return false
     }
@@ -154,7 +175,6 @@ class AllAppsCategoryTouchHelperCallback(
         val itemView = viewHolder.itemView
         val density = itemView.context.resources.displayMetrics.density
 
-        // Check if movement exceeds drag touch slop
         val distancePx = Math.hypot(dX.toDouble(), dY.toDouble()).toFloat()
         val slopPx = DRAG_TOUCH_SLOP_DP * density
         if (distancePx > slopPx) {
@@ -164,17 +184,14 @@ class AllAppsCategoryTouchHelperCallback(
 
         val thresholdPx = TOP_EDGE_THRESHOLD_DP * density
 
-        // Compute the top of the dragged icon in screen coordinates
         val location = IntArray(2)
         itemView.getLocationOnScreen(location)
         val itemScreenTop = location[1].toFloat() + dY
 
-        if (itemScreenTop < thresholdPx) {
+        if (itemScreenTop < thresholdPx && !pendingHomescreenHandoff) {
             pendingHomescreenHandoff = true
             cancelMenuTimer()
-            // Grab the view reference before clearing so we can start drag on it
             val dragView = itemView
-            // Post to next frame so ItemTouchHelper finishes its current draw pass cleanly
             recyclerView.post {
                 handOffToHomescreen(recyclerView, dragView)
             }
@@ -188,10 +205,10 @@ class AllAppsCategoryTouchHelperCallback(
 
     private fun showIconContextMenu(recyclerView: RecyclerView, itemView: View) {
         try {
+            if (!itemView.isAttachedToWindow) return
             isMenuShowing = true
             cancelMenuTimer()
 
-            // Reset view visual animation
             itemView.animate()
                 .scaleX(1.0f)
                 .scaleY(1.0f)
@@ -199,7 +216,6 @@ class AllAppsCategoryTouchHelperCallback(
                 .start()
             itemView.elevation = 0f
 
-            // Cancel ItemTouchHelper drag pass
             val helper = list.itemTouchHelper
             helper?.attachToRecyclerView(null)
             helper?.attachToRecyclerView(recyclerView)

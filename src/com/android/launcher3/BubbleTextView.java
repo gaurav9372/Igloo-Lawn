@@ -978,6 +978,9 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
      * @param canvas The canvas to draw to.
      */
     protected void drawDotIfNecessary(Canvas canvas) {
+        if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
+            return;
+        }
         if (!mForceHideDot && (hasDot() || mDotParams.scale > 0)) {
             getIconBounds(mDotParams.iconBounds);
             Utilities.scaleRectAboutCenter(mDotParams.iconBounds, ICON_VISIBLE_AREA_FACTOR);

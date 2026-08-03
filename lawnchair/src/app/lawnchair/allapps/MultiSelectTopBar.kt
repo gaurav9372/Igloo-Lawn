@@ -135,11 +135,15 @@ fun MultiSelectTopBar(
 }
 
 private fun uninstallSelectedApps(context: Context, selectedKeys: Set<String>) {
+    val uninstalledPackages = mutableSetOf<String>()
     selectedKeys.forEach { keyStr ->
         val componentKey = ComponentKey.fromString(keyStr) ?: return@forEach
         val packageName = componentKey.componentName.packageName
-        if (!ApplicationInfoWrapper(context, packageName, componentKey.user).isSystem()) {
-            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
+        if (!uninstalledPackages.contains(packageName) && !ApplicationInfoWrapper(context, packageName, componentKey.user).isSystem()) {
+            uninstalledPackages.add(packageName)
+            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
             context.startActivity(intent)
         }
     }

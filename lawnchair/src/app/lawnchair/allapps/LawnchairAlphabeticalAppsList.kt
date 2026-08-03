@@ -79,7 +79,7 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun observeFolders() {
-        viewModel.folders.observeOnce(context as LifecycleOwner) { folders ->
+        viewModel.folders.observe(context as LifecycleOwner) { folders ->
             if (folders != null) {
                 folderList = folders
                     .sortedBy {
@@ -93,7 +93,7 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun observeCategories() {
-        categoryViewModel.categories.observeOnce(context as LifecycleOwner) { categories ->
+        categoryViewModel.categories.observe(context as LifecycleOwner) { categories ->
             if (categories != null) {
                 categoryList = categories.toMutableList()
                 updateAdapterItems()
@@ -204,14 +204,29 @@ class LawnchairAlphabeticalAppsList<T>(
 
     fun persistCategoryChanges() {
         val updatedList = categoryList.map { categoryEntry ->
-            val categoryApps = mAdapterItems.filter {
+            val visibleCategoryApps = mAdapterItems.filter {
                 it.categoryId == categoryEntry.id.toString() && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
             }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
 
-            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, categoryApps)
-            categoryEntry.copy(itemComponentKeys = categoryApps)
+            val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                hiddenApps.contains(key)
+            }
+            val allCategoryApps = (visibleCategoryApps + hiddenCategoryApps).distinct()
+
+            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, allCategoryApps)
+            categoryEntry.copy(itemComponentKeys = allCategoryApps)
         }
         categoryList = updatedList.toMutableList()
+
+        val noCategoryKeys = mAdapterItems.filter {
+            it.categoryId == "no_category" && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
+        }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
+
+        if (noCategoryKeys.isNotEmpty()) {
+            context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(noCategoryKeys)
+            }
+        }
     }
 
     fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {

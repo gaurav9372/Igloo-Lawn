@@ -498,9 +498,7 @@ fun BatchSelectCategorySheet(
                     subtitle = "Remove from categories",
                     onClick = {
                         scope.launch {
-                            selectedKeys.forEach { keyStr ->
-                                categoryService.moveAppToCategory(keyStr, 0)
-                            }
+                            categoryService.moveAppsToCategory(selectedKeys, 0)
                             Toast.makeText(context, "Moved ${selectedKeys.size} apps to No Category", Toast.LENGTH_SHORT).show()
                             onClose()
                         }
@@ -514,9 +512,7 @@ fun BatchSelectCategorySheet(
                     subtitle = "$count apps currently",
                     onClick = {
                         scope.launch {
-                            selectedKeys.forEach { keyStr ->
-                                categoryService.moveAppToCategory(keyStr, category.id)
-                            }
+                            categoryService.moveAppsToCategory(selectedKeys, category.id)
                             Toast.makeText(context, "Moved ${selectedKeys.size} apps to ${category.title}", Toast.LENGTH_SHORT).show()
                             onClose()
                         }
