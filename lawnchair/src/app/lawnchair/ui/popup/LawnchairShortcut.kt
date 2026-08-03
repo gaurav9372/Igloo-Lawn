@@ -16,13 +16,31 @@ import android.os.UserHandle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.lawnchair.LawnchairLauncher
+import app.lawnchair.data.category.service.CategoryService
 import app.lawnchair.override.CustomizeAppDialog
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.preferences2.firstCached
+import app.lawnchair.ui.preferences.components.controls.ClickablePreference
 import app.lawnchair.views.ComposeBottomSheet
+import kotlinx.coroutines.launch
 import com.android.launcher3.AbstractFloatingView
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPLICATION
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_TASK
@@ -50,6 +68,16 @@ class LawnchairShortcut {
                     null
                 } else {
                     getAppInfo(activity, itemInfo)?.let { Customize(activity, it, itemInfo, originalView) }
+                }
+            }
+
+        val EDIT_CATEGORY =
+            SystemShortcut.Factory { activity: LawnchairLauncher, itemInfo, originalView ->
+                val prefs2 = PreferenceManager2.getInstance(activity)
+                if (prefs2.lockHomeScreen.firstCached()) {
+                    null
+                } else {
+                    getAppInfo(activity, itemInfo)?.let { EditCategory(activity, it, itemInfo, originalView) }
                 }
             }
 
@@ -159,6 +187,31 @@ class LawnchairShortcut {
             } else {
                 Toast.makeText(launcher, R.string.activity_not_found, Toast.LENGTH_SHORT).show()
                 AbstractFloatingView.closeAllOpenViews(launcher)
+            }
+        }
+    }
+
+    class EditCategory(
+        private val launcher: LawnchairLauncher,
+        private val appInfo: ModelAppInfo,
+        itemInfo: ItemInfo,
+        originalView: View,
+    ) : SystemShortcut<LawnchairLauncher>(R.drawable.ic_setting, R.string.edit_category, launcher, itemInfo, originalView) {
+
+        override fun onClick(v: View) {
+            AbstractFloatingView.closeAllOpenViews(launcher)
+            val componentKeyString = appInfo.toComponentKey().toString()
+            val appName = appInfo.title?.toString() ?: ""
+
+            ComposeBottomSheet.show(
+                context = launcher,
+                contentPaddings = PaddingValues(bottom = 32.dp),
+            ) {
+                SelectCategorySheet(
+                    componentKeyString = componentKeyString,
+                    appName = appName,
+                    onClose = { close(true) },
+                )
             }
         }
     }
@@ -312,6 +365,75 @@ class LawnchairShortcut {
                 else -> return null
             }
             return Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(installerPackage)
+        }
+    }
+}
+
+@Composable
+fun SelectCategorySheet(
+    componentKeyString: String,
+    appName: String,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val categoryService = remember { CategoryService.INSTANCE.get(context) }
+    val categories by categoryService.getCategoriesFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    val currentCategory = remember(categories, componentKeyString) {
+        categories.find { it.itemComponentKeys.contains(componentKeyString) }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.select_category_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        if (appName.isNotBlank()) {
+            Text(
+                text = appName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+        }
+
+        LazyColumn {
+            item {
+                val isUnassigned = currentCategory == null
+                ClickablePreference(
+                    label = "No Category",
+                    subtitle = if (isUnassigned) "Current selection" else null,
+                    onClick = {
+                        scope.launch {
+                            categoryService.moveAppToCategory(componentKeyString, 0)
+                            Toast.makeText(context, "Moved to No Category", Toast.LENGTH_SHORT).show()
+                            onClose()
+                        }
+                    },
+                )
+            }
+            items(categories) { category ->
+                val isSelected = currentCategory?.id == category.id
+                val count = category.itemComponentKeys.size
+                ClickablePreference(
+                    label = category.title,
+                    subtitle = if (isSelected) "Current category ($count apps)" else "$count apps",
+                    onClick = {
+                        scope.launch {
+                            categoryService.moveAppToCategory(componentKeyString, category.id)
+                            Toast.makeText(context, "Moved to ${category.title}", Toast.LENGTH_SHORT).show()
+                            onClose()
+                        }
+                    },
+                )
+            }
         }
     }
 }

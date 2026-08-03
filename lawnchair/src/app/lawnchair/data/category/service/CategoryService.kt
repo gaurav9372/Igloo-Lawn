@@ -48,6 +48,20 @@ class CategoryService(context: Context) {
         categoryDao.reorderCategories(orderedIds)
     }
 
+    suspend fun moveAppToCategory(componentKeyString: String, targetCategoryId: Int) = withContext(Dispatchers.IO) {
+        categoryDao.removeComponentKeysFromAllCategories(listOf(componentKeyString))
+        if (targetCategoryId > 0) {
+            val items = listOf(
+                CategoryItemEntity(
+                    categoryId = targetCategoryId,
+                    rank = 9999,
+                    componentKey = componentKeyString,
+                ),
+            )
+            categoryDao.insertCategoryItems(items)
+        }
+    }
+
     private fun CategoryWithItems.toCategoryEntry() = CategoryEntry(
         id = category.id,
         title = category.title,
