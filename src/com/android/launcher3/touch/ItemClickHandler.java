@@ -96,8 +96,22 @@ public class ItemClickHandler {
 
     private static void onClick(View v) {
         // Make sure that rogue clicks don't get through while allapps is launching, or after the
-        // view has detached (it's possible for this to happen if the view is removed mid touch).
+        // view has detached (it's possible for this to happen if the view is removed mid touch).\
         if (v.getWindowToken() == null) return;
+
+        // Intercept clicks when homescreen multi-select is active — toggle selection, don't launch.
+        if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()
+                && app.lawnchair.allapps.MultiSelectManager.INSTANCE.isHomescreenMode().getValue()) {
+            Object tag = v.getTag();
+            if (tag instanceof ItemInfo itemInfo && itemInfo.getTargetComponent() != null) {
+                String key = new com.android.launcher3.util.ComponentKey(
+                        itemInfo.getTargetComponent(), itemInfo.user).toString();
+                app.lawnchair.allapps.MultiSelectManager.INSTANCE
+                        .toggleHomescreenSelection(key, itemInfo.id);
+                v.invalidate();
+            }
+            return;
+        }
 
         Launcher launcher = Launcher.getLauncher(v.getContext());
         if (!launcher.getWorkspace().isFinishedSwitchingState()) return;
@@ -131,6 +145,7 @@ public class ItemClickHandler {
             ((ItemClickProxy) tag).onItemClicked(v);
         }
     }
+
 
     /**
      * Event handler for a folder icon click.
