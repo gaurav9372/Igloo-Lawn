@@ -947,9 +947,9 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
                 canvas.translate(scrollX, scrollY);
 
                 float density = getResources().getDisplayMetrics().density;
-                float cx = iconBounds.right - 6 * density;
-                float cy = iconBounds.top + 6 * density;
-                float radius = 10 * density;
+                float radius = 9.5f * density;
+                float cx = iconBounds.right - 2 * density;
+                float cy = iconBounds.top + radius + 1 * density;
 
                 Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 if (isSelected) {
@@ -969,9 +969,13 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
                     checkPath.lineTo(cx + radius * 0.45f, cy - radius * 0.3f);
                     canvas.drawPath(checkPath, paint);
                 } else {
-                    paint.setColor(0xAA888888);
+                    paint.setColor(0xCCFFFFFF);
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(cx, cy, radius, paint);
+
+                    paint.setColor(0x88000000);
                     paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(1.8f * density);
+                    paint.setStrokeWidth(1.5f * density);
                     canvas.drawCircle(cx, cy, radius, paint);
                 }
                 canvas.translate(-scrollX, -scrollY);
