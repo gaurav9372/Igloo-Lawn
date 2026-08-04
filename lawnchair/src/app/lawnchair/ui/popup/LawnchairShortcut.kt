@@ -246,10 +246,21 @@ class LawnchairShortcut {
         override fun onClick(v: View) {
             AbstractFloatingView.closeAllOpenViews(launcher)
             val componentKeyString = appInfo.toComponentKey().toString()
-            app.lawnchair.allapps.MultiSelectManager.startMultiSelect(componentKeyString)
-            launcher.appsView?.getActiveRecyclerView()?.invalidate()
+            val isInDrawer = mItemInfo.container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS ||
+                mItemInfo.container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION
+            if (isInDrawer) {
+                app.lawnchair.allapps.MultiSelectManager.startMultiSelect(componentKeyString)
+                launcher.appsView?.getActiveRecyclerView()?.invalidate()
+            } else {
+                // Homescreen / hotseat icon — store workspace item id for removal
+                app.lawnchair.allapps.MultiSelectManager.startHomescreenMultiSelect(
+                    initialComponentKey = componentKeyString,
+                    itemId = mItemInfo.id,
+                )
+            }
         }
     }
+
 
     class AddToHomescreen(
         private val launcher: LawnchairLauncher,

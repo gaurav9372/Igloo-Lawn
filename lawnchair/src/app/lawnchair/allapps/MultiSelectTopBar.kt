@@ -44,6 +44,7 @@ fun MultiSelectTopBar(
     modifier: Modifier = Modifier,
 ) {
     val selectedKeys by MultiSelectManager.selectedComponentKeys.collectAsStateWithLifecycle()
+    val isHomescreenMode by MultiSelectManager.isHomescreenMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Surface(
@@ -63,6 +64,7 @@ fun MultiSelectTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            // Left: close + count
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -83,76 +85,139 @@ fun MultiSelectTopBar(
                 )
             }
 
+            // Right: actions — depend on context
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Add to Homescreen Action
-                IconButton(
-                    onClick = {
-                        if (selectedKeys.isEmpty()) {
-                            Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
-                            return@IconButton
-                        }
-                        addSelectedAppsToHomescreen(launcher, selectedKeys)
-                    },
-                    enabled = selectedKeys.isNotEmpty(),
-                ) {
-                    Icon(
-                        Icons.Rounded.Home,
-                        contentDescription = "Add to Homescreen",
-                        tint = if (selectedKeys.isNotEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    )
-                }
+                if (isHomescreenMode) {
+                    // ── Homescreen mode: only Remove icon ──
+                    IconButton(
+                        onClick = {
+                            if (selectedKeys.isEmpty()) {
+                                Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
+                                return@IconButton
+                            }
+                            removeSelectedFromHomescreen(launcher, selectedKeys)
+                        },
+                        enabled = selectedKeys.isNotEmpty(),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Remove from homescreen",
+                            tint = if (selectedKeys.isNotEmpty())
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f),
+                        )
+                    }
+                } else {
+                    // ── App drawer mode: Add to Homescreen, Edit Category, Uninstall ──
 
-                // Edit Category Action
-                IconButton(
-                    onClick = {
-                        if (selectedKeys.isEmpty()) {
-                            Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
-                            return@IconButton
-                        }
-                        ComposeBottomSheet.show(
-                            context = launcher,
-                            contentPaddings = PaddingValues(bottom = 32.dp),
-                        ) {
-                            BatchSelectCategorySheet(
-                                selectedKeys = selectedKeys.toList(),
-                                onClose = {
-                                    close(true)
-                                    MultiSelectManager.exitMultiSelect()
-                                },
-                            )
-                        }
-                    },
-                    enabled = selectedKeys.isNotEmpty(),
-                ) {
-                    Icon(
-                        Icons.Rounded.Edit,
-                        contentDescription = "Edit Category",
-                        tint = if (selectedKeys.isNotEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    )
-                }
+                    // Add to Homescreen
+                    IconButton(
+                        onClick = {
+                            if (selectedKeys.isEmpty()) {
+                                Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
+                                return@IconButton
+                            }
+                            addSelectedAppsToHomescreen(launcher, selectedKeys)
+                        },
+                        enabled = selectedKeys.isNotEmpty(),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Home,
+                            contentDescription = "Add to Homescreen",
+                            tint = if (selectedKeys.isNotEmpty())
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        )
+                    }
 
-                // Uninstall Action
-                IconButton(
-                    onClick = {
-                        if (selectedKeys.isEmpty()) {
-                            Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
-                            return@IconButton
-                        }
-                        uninstallSelectedApps(context, selectedKeys)
-                    },
-                    enabled = selectedKeys.isNotEmpty(),
-                ) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = "Uninstall",
-                        tint = if (selectedKeys.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.38f),
-                    )
+                    // Edit Category
+                    IconButton(
+                        onClick = {
+                            if (selectedKeys.isEmpty()) {
+                                Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
+                                return@IconButton
+                            }
+                            ComposeBottomSheet.show(
+                                context = launcher,
+                                contentPaddings = PaddingValues(bottom = 32.dp),
+                            ) {
+                                BatchSelectCategorySheet(
+                                    selectedKeys = selectedKeys.toList(),
+                                    onClose = {
+                                        close(true)
+                                        MultiSelectManager.exitMultiSelect()
+                                    },
+                                )
+                            }
+                        },
+                        enabled = selectedKeys.isNotEmpty(),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Edit,
+                            contentDescription = "Edit Category",
+                            tint = if (selectedKeys.isNotEmpty())
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        )
+                    }
+
+                    // Uninstall
+                    IconButton(
+                        onClick = {
+                            if (selectedKeys.isEmpty()) {
+                                Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
+                                return@IconButton
+                            }
+                            uninstallSelectedApps(context, selectedKeys)
+                        },
+                        enabled = selectedKeys.isNotEmpty(),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Uninstall",
+                            tint = if (selectedKeys.isNotEmpty())
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f),
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Removes the selected workspace icons from the homescreen (does not uninstall).
+ * Uses modelWriter.deleteItemFromDatabase for each selected item id.
+ */
+private fun removeSelectedFromHomescreen(launcher: LawnchairLauncher, selectedKeys: Set<String>) {
+    val itemIds = MultiSelectManager.selectedItemIds.value
+    var removed = 0
+    launcher.modelWriter.prepareToUndoDelete()
+    itemIds.forEach { (_, itemId) ->
+        val view = launcher.workspace.getViewByItemId(itemId)
+        val itemInfo = view?.tag as? com.android.launcher3.model.data.ItemInfo
+        if (itemInfo != null) {
+            launcher.workspace.removeWorkspaceItem(view)
+            launcher.modelWriter.deleteItemFromDatabase(itemInfo, "user removed via multi-select")
+            removed++
+        }
+    }
+    if (removed > 0) {
+        launcher.modelWriter.commitDelete()
+        Toast.makeText(
+            launcher,
+            if (removed == 1) launcher.getString(R.string.item_removed) else "Removed $removed icons",
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+    MultiSelectManager.exitMultiSelect()
 }
 
 private fun addSelectedAppsToHomescreen(launcher: LawnchairLauncher, selectedKeys: Set<String>) {

@@ -315,7 +315,6 @@ class LawnchairLauncher : QuickstepLauncher() {
             Stream.of(
                 LawnchairShortcut.ADD_TO_HOMESCREEN,
                 LawnchairShortcut.EDIT_CATEGORY,
-                LawnchairShortcut.MULTI_SELECT,
             )
         } else {
             Stream.empty()
@@ -328,6 +327,7 @@ class LawnchairLauncher : QuickstepLauncher() {
                     LawnchairShortcut.UNINSTALL,
                     LawnchairShortcut.CUSTOMIZE,
                     LawnchairShortcut.OPEN_IN_STORE,
+                    LawnchairShortcut.MULTI_SELECT,
                 ),
                 drawerOnlyShortcuts,
             ),
