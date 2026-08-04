@@ -93,6 +93,7 @@ sealed class BasePreferenceManager(private val context: Context) : SharedPrefere
         }
     }
 
+    @androidx.compose.runtime.Stable
     abstract inner class BasePref<T>(override val key: String, private val primaryListener: ChangeListener?) : PrefEntry<T> {
         protected var loaded = false
         private val listeners = CopyOnWriteArraySet<PreferenceChangeListener>()
@@ -118,6 +119,7 @@ sealed class BasePreferenceManager(private val context: Context) : SharedPrefere
         }
     }
 
+    @androidx.compose.runtime.Stable
     abstract inner class StringBasedPref<T>(
         key: String,
         override val defaultValue: T,
@@ -152,6 +154,7 @@ sealed class BasePreferenceManager(private val context: Context) : SharedPrefere
         protected abstract fun stringify(value: T): String
     }
 
+    @androidx.compose.runtime.Stable
     inner class StringPref(
         key: String,
         defaultValue: String,
