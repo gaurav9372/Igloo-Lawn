@@ -149,8 +149,16 @@ class LawnchairAlphabeticalAppsList<T>(
                 }
             }
 
+            val unassignedOrder = prefs.unassignedCategoryOrder.get()
+                .split("|")
+                .filter { it.isNotBlank() }
+
             val unassignedApps = validApps.filterNot { app ->
                 assignedAppKeys.contains(app.toComponentKey().toString())
+            }.sortedBy { app ->
+                val key = app.toComponentKey().toString()
+                val idx = unassignedOrder.indexOf(key)
+                if (idx != -1) idx else Int.MAX_VALUE
             }
 
             if (unassignedApps.isNotEmpty()) {
@@ -230,6 +238,7 @@ class LawnchairAlphabeticalAppsList<T>(
         }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
 
         if (noCategoryKeys.isNotEmpty()) {
+            prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
             context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(noCategoryKeys)
             }
