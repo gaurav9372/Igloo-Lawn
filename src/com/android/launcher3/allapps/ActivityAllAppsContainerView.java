@@ -567,7 +567,7 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         if (mTouchHandler != null) {
             mTouchHandler.endFastScrolling();
         }
-        if (mHeader != null && mHeader.getVisibility() == VISIBLE) {
+        if (mHeader != null) {
             mHeader.reset(animate);
         }
         updateBackgroundVisibility(mActivityContext.getDeviceProfile());

@@ -395,6 +395,9 @@ public class FloatingHeaderView extends LinearLayout implements
         if (mAnimator.isStarted()) {
             mAnimator.cancel();
         }
+        mHeaderCollapsed = false;
+        mSnappedScrolledY = -mMaxTranslation;
+        maybeSetTabVisibility(VISIBLE);
         if (animate) {
             mAnimator.setIntValues(mTranslationY, 0);
             mAnimator.addUpdateListener(this);
@@ -404,9 +407,6 @@ public class FloatingHeaderView extends LinearLayout implements
             mTranslationY = 0;
             applyVerticalMove();
         }
-        mHeaderCollapsed = false;
-        mSnappedScrolledY = -mMaxTranslation;
-        maybeSetTabVisibility(VISIBLE);
         if (mCurrentRV != null && !PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
             mCurrentRV.scrollToTop();
         }
