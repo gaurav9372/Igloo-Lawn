@@ -188,7 +188,15 @@ class LawnchairLauncher : QuickstepLauncher() {
                         multiSelectOverlayView = null
                     }
                 }
-                mAppsView?.activeRecyclerView?.invalidate()
+                // Invalidate ALL visible icon views so circles appear/disappear immediately
+                invalidateAllIconViews()
+            }
+        }
+
+        // Also invalidate on every selection toggle so ticked/unticked state redraws instantly
+        lifecycleScope.launch {
+            MultiSelectManager.selectedComponentKeys.collect {
+                invalidateAllIconViews()
             }
         }
 
@@ -200,7 +208,12 @@ class LawnchairLauncher : QuickstepLauncher() {
         launcher.stateManager.addStateListener(clearSearchStateListener)
         launcher.stateManager.addStateListener(object : StateManager.StateListener<LauncherState> {
             override fun onStateTransitionComplete(finalState: LauncherState) {
-                if (finalState != LauncherState.ALL_APPS) {
+                // Exit drawer multi-select when leaving ALL_APPS.
+                // Do NOT exit homescreen multi-select when on NORMAL state — it lives there.
+                if (finalState != LauncherState.ALL_APPS && !MultiSelectManager.isHomescreenMode.value) {
+                    MultiSelectManager.exitMultiSelect()
+                } else if (finalState == LauncherState.ALL_APPS && MultiSelectManager.isHomescreenMode.value) {
+                    // Entering drawer while homescreen multi-select is active → exit it.
                     MultiSelectManager.exitMultiSelect()
                 }
             }
@@ -368,6 +381,26 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     override fun handleHomeTap() {
         gestureController.onHomePressed()
+    }
+
+    /**
+     * Invalidates every visible app icon on both the workspace and in the app drawer so that
+     * multi-select circles (empty ring / filled tick) are drawn or cleared immediately.
+     * BubbleTextView.onDraw() already has the drawing logic — it just needs a redraw trigger.
+     */
+    private fun invalidateAllIconViews() {
+        // Invalidate all workspace / hotseat icon views
+        workspace?.mapOverItems { _, view ->
+            view?.invalidate()
+            false // keep iterating
+        }
+        // Invalidate all visible children in the drawer RecyclerView
+        val rv = mAppsView?.activeRecyclerView
+        if (rv != null) {
+            for (i in 0 until rv.childCount) {
+                rv.getChildAt(i)?.invalidate()
+            }
+        }
     }
 
     fun bindItems(items: List<ItemInfo>, forceAnimateIcons: Boolean) {

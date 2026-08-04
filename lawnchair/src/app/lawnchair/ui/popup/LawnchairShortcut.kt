@@ -250,7 +250,6 @@ class LawnchairShortcut {
                 mItemInfo.container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION
             if (isInDrawer) {
                 app.lawnchair.allapps.MultiSelectManager.startMultiSelect(componentKeyString)
-                launcher.appsView?.getActiveRecyclerView()?.invalidate()
             } else {
                 // Homescreen / hotseat icon — store workspace item id for removal
                 app.lawnchair.allapps.MultiSelectManager.startHomescreenMultiSelect(
