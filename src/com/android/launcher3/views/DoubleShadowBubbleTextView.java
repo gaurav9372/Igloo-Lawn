@@ -133,6 +133,7 @@ public class DoubleShadowBubbleTextView extends BubbleTextView {
 
         drawDotIfNecessary(canvas);
         drawRunningAppIndicatorIfNecessary(canvas);
+        drawSelectionBadgeIfNecessary(canvas);
     }
 
     private boolean skipDoubleShadow() {
