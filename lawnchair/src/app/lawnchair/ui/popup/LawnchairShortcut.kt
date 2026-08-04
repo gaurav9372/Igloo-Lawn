@@ -256,16 +256,11 @@ class LawnchairShortcut {
         private val appInfo: ModelAppInfo,
         itemInfo: ItemInfo,
         originalView: View,
-    ) : SystemShortcut<LawnchairLauncher>(R.drawable.ic_install_no_shadow, R.string.add_to_home_screen, launcher, itemInfo, originalView) {
+    ) : SystemShortcut<LawnchairLauncher>(R.drawable.ic_home, R.string.add_to_home_screen, launcher, itemInfo, originalView) {
 
         override fun onClick(v: View) {
             AbstractFloatingView.closeAllOpenViews(launcher)
-            val success = launcher.accessibilityDelegate?.addToWorkspace(appInfo, false, null) ?: false
-            if (success) {
-                Toast.makeText(launcher, R.string.item_added_to_workspace, Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(launcher, R.string.out_of_space, Toast.LENGTH_SHORT).show()
-            }
+            addAppsToHomescreen(launcher, listOf(appInfo))
         }
     }
 
@@ -548,5 +543,61 @@ fun BatchSelectCategorySheet(
                 )
             }
         }
+    }
+}
+
+fun addAppsToHomescreen(launcher: LawnchairLauncher, appInfos: List<com.android.launcher3.model.data.AppInfo>) {
+    if (appInfos.isEmpty()) return
+
+    val dataModel = launcher.model.bgDataModel
+    val workspaceScreens = synchronized(dataModel) {
+        dataModel.itemsIdMap.collectWorkspaceScreens(launcher)
+    }
+    val addedWorkspaceScreens = com.android.launcher3.util.IntArray()
+    val addedItems = ArrayList<ItemInfo>()
+    val spaceFinder = com.android.launcher3.model.WorkspaceItemSpaceFinder(
+        dataModel,
+        launcher.deviceProfile.inv,
+        launcher.model,
+    )
+
+    appInfos.forEach { appInfo ->
+        val item = appInfo.makeWorkspaceItem(launcher)
+        val coords = spaceFinder.findSpaceForItem(
+            workspaceScreens,
+            addedWorkspaceScreens,
+            addedItems,
+            item.spanX,
+            item.spanY,
+            launcher,
+        )
+        val screenId = coords[0]
+        if (screenId != -1) {
+            item.container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP
+            item.screenId = screenId
+            item.cellX = coords[1]
+            item.cellY = coords[2]
+            launcher.modelWriter.addItemToDatabase(
+                item,
+                com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP,
+                screenId,
+                coords[1],
+                coords[2],
+            )
+            addedItems.add(item)
+        }
+    }
+
+    if (addedItems.isNotEmpty()) {
+        launcher.bindItems(addedItems, true)
+        launcher.stateManager.goToState(com.android.launcher3.LauncherState.NORMAL)
+        Toast.makeText(
+            launcher,
+            if (addedItems.size == 1) launcher.getString(R.string.item_added_to_workspace)
+            else "Added ${addedItems.size} app(s) to home screen",
+            Toast.LENGTH_SHORT,
+        ).show()
+    } else {
+        Toast.makeText(launcher, R.string.out_of_space, Toast.LENGTH_SHORT).show()
     }
 }

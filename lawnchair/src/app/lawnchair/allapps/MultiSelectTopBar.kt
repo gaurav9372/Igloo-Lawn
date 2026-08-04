@@ -156,20 +156,15 @@ fun MultiSelectTopBar(
 }
 
 private fun addSelectedAppsToHomescreen(launcher: LawnchairLauncher, selectedKeys: Set<String>) {
-    var addedCount = 0
-    selectedKeys.forEach { keyStr ->
-        val componentKey = ComponentKey.fromString(keyStr) ?: return@forEach
-        val appInfo = launcher.appsView?.appsStore?.getApp(componentKey) ?: return@forEach
-        val success = launcher.accessibilityDelegate?.addToWorkspace(appInfo, false, null) ?: false
-        if (success) {
-            addedCount++
-        }
+    val appInfos = selectedKeys.mapNotNull { keyStr ->
+        val componentKey = ComponentKey.fromString(keyStr) ?: return@mapNotNull null
+        launcher.appsView?.appsStore?.getApp(componentKey)
     }
-    if (addedCount > 0) {
-        Toast.makeText(launcher, "Added $addedCount app(s) to home screen", Toast.LENGTH_SHORT).show()
-    } else {
-        Toast.makeText(launcher, R.string.out_of_space, Toast.LENGTH_SHORT).show()
+    if (appInfos.isEmpty()) {
+        Toast.makeText(launcher, "No apps selected", Toast.LENGTH_SHORT).show()
+        return
     }
+    app.lawnchair.ui.popup.addAppsToHomescreen(launcher, appInfos)
     MultiSelectManager.exitMultiSelect()
 }
 
