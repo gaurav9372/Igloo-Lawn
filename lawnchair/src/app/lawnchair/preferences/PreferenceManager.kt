@@ -170,7 +170,7 @@ class PreferenceManager @Inject constructor(
     val wallpaperBlurFactorThreshold = FloatPref("pref_wallpaperBlurFactor", 3.0F, recreate)
 
     val drawerListOrder = StringPref("pref_drawerListOrder", "", reloadGrid)
-    val unassignedCategoryOrder = StringPref("pref_unassignedCategoryOrder", "", reloadGrid)
+    val unassignedCategoryOrder = StringPref("pref_unassignedCategoryOrder", "", null)
     val drawerList = BoolPref("pref_drawerList", true, recreate)
     val folderApps = BoolPref("pref_hideFolderApps", true, reloadGrid)
 
