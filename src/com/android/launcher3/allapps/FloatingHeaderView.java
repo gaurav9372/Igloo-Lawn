@@ -405,7 +405,7 @@ public class FloatingHeaderView extends LinearLayout implements
         }
         mHeaderCollapsed = false;
         mSnappedScrolledY = -mMaxTranslation;
-        if (!PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
+        if (mCurrentRV != null && !PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
             mCurrentRV.scrollToTop();
         }
     }
