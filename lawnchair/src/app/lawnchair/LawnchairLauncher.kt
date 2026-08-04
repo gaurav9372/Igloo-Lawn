@@ -307,17 +307,32 @@ class LawnchairLauncher : QuickstepLauncher() {
         out.add(SearchBarStateHandler(this))
     }
 
-    override fun getSupportedShortcuts(container: Int): Stream<SystemShortcut.Factory<*>> = Stream.concat(
-        super.getSupportedShortcuts(container),
+    override fun getSupportedShortcuts(container: Int): Stream<SystemShortcut.Factory<*>> {
+        val isInAppDrawer = container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS ||
+            container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS_PREDICTION
+
+        val drawerOnlyShortcuts = if (isInAppDrawer) {
             Stream.of(
                 LawnchairShortcut.ADD_TO_HOMESCREEN,
-                LawnchairShortcut.UNINSTALL,
-                LawnchairShortcut.CUSTOMIZE,
                 LawnchairShortcut.EDIT_CATEGORY,
                 LawnchairShortcut.MULTI_SELECT,
-                LawnchairShortcut.OPEN_IN_STORE,
+            )
+        } else {
+            Stream.empty()
+        }
+
+        return Stream.concat(
+            super.getSupportedShortcuts(container),
+            Stream.concat(
+                Stream.of(
+                    LawnchairShortcut.UNINSTALL,
+                    LawnchairShortcut.CUSTOMIZE,
+                    LawnchairShortcut.OPEN_IN_STORE,
+                ),
+                drawerOnlyShortcuts,
             ),
-    )
+        )
+    }
 
     override fun onBackPressed() {
         if (MultiSelectManager.isMultiSelectActive.value) {
