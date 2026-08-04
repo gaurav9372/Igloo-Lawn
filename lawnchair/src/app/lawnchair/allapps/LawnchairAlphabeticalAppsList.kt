@@ -132,6 +132,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
             categoryList.forEach { categoryEntry ->
                 val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
+                    if (hiddenApps.contains(keyString)) return@mapNotNull null
                     val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
                     appsStore.getApp(componentKey) as? AppInfo
                 }
