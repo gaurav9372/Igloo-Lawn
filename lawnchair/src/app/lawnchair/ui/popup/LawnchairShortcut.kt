@@ -91,6 +91,16 @@ class LawnchairShortcut {
                 }
             }
 
+        val ADD_TO_HOMESCREEN =
+            SystemShortcut.Factory { activity: LawnchairLauncher, itemInfo, originalView ->
+                val prefs2 = PreferenceManager2.getInstance(activity)
+                if (prefs2.lockHomeScreen.firstCached()) {
+                    null
+                } else {
+                    getAppInfo(activity, itemInfo)?.let { AddToHomescreen(activity, it, itemInfo, originalView) }
+                }
+            }
+
         private fun getAppInfo(launcher: LawnchairLauncher, itemInfo: ItemInfo): ModelAppInfo? {
             if (itemInfo is ModelAppInfo) return itemInfo
             if (itemInfo.itemType != ITEM_TYPE_APPLICATION) return null
@@ -238,6 +248,24 @@ class LawnchairShortcut {
             val componentKeyString = appInfo.toComponentKey().toString()
             app.lawnchair.allapps.MultiSelectManager.startMultiSelect(componentKeyString)
             launcher.appsView?.getActiveRecyclerView()?.invalidate()
+        }
+    }
+
+    class AddToHomescreen(
+        private val launcher: LawnchairLauncher,
+        private val appInfo: ModelAppInfo,
+        itemInfo: ItemInfo,
+        originalView: View,
+    ) : SystemShortcut<LawnchairLauncher>(R.drawable.ic_install_no_shadow, R.string.add_to_home_screen, launcher, itemInfo, originalView) {
+
+        override fun onClick(v: View) {
+            AbstractFloatingView.closeAllOpenViews(launcher)
+            val success = launcher.accessibilityDelegate?.addToWorkspace(appInfo, false, null) ?: false
+            if (success) {
+                Toast.makeText(launcher, R.string.item_added_to_workspace, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(launcher, R.string.out_of_space, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

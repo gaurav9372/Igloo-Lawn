@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.ui.popup.BatchSelectCategorySheet
 import app.lawnchair.views.ComposeBottomSheet
+import com.android.launcher3.R
+import com.android.launcher3.model.data.AppInfo
 import com.android.launcher3.util.ApplicationInfoWrapper
 import com.android.launcher3.util.ComponentKey
 
@@ -83,6 +86,24 @@ fun MultiSelectTopBar(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Add to Homescreen Action
+                IconButton(
+                    onClick = {
+                        if (selectedKeys.isEmpty()) {
+                            Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
+                            return@IconButton
+                        }
+                        addSelectedAppsToHomescreen(launcher, selectedKeys)
+                    },
+                    enabled = selectedKeys.isNotEmpty(),
+                ) {
+                    Icon(
+                        Icons.Rounded.Home,
+                        contentDescription = "Add to Homescreen",
+                        tint = if (selectedKeys.isNotEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                }
+
                 // Edit Category Action
                 IconButton(
                     onClick = {
@@ -132,6 +153,24 @@ fun MultiSelectTopBar(
             }
         }
     }
+}
+
+private fun addSelectedAppsToHomescreen(launcher: LawnchairLauncher, selectedKeys: Set<String>) {
+    var addedCount = 0
+    selectedKeys.forEach { keyStr ->
+        val componentKey = ComponentKey.fromString(keyStr) ?: return@forEach
+        val appInfo = launcher.appsView?.appsStore?.getApp(componentKey) ?: return@forEach
+        val success = launcher.accessibilityDelegate?.addToWorkspace(appInfo, false, null) ?: false
+        if (success) {
+            addedCount++
+        }
+    }
+    if (addedCount > 0) {
+        Toast.makeText(launcher, "Added $addedCount app(s) to home screen", Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(launcher, R.string.out_of_space, Toast.LENGTH_SHORT).show()
+    }
+    MultiSelectManager.exitMultiSelect()
 }
 
 private fun uninstallSelectedApps(context: Context, selectedKeys: Set<String>) {

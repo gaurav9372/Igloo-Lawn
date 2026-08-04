@@ -309,10 +309,14 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     override fun getSupportedShortcuts(container: Int): Stream<SystemShortcut.Factory<*>> = Stream.concat(
         super.getSupportedShortcuts(container),
-        Stream.concat(
-            Stream.of(LawnchairShortcut.UNINSTALL, LawnchairShortcut.CUSTOMIZE, LawnchairShortcut.EDIT_CATEGORY, LawnchairShortcut.MULTI_SELECT, LawnchairShortcut.OPEN_IN_STORE),
-            if (LawnchairApp.isRecentsEnabled) Stream.of(LawnchairShortcut.PAUSE_APPS) else Stream.empty(),
-        ),
+            Stream.of(
+                LawnchairShortcut.ADD_TO_HOMESCREEN,
+                LawnchairShortcut.UNINSTALL,
+                LawnchairShortcut.CUSTOMIZE,
+                LawnchairShortcut.EDIT_CATEGORY,
+                LawnchairShortcut.MULTI_SELECT,
+                LawnchairShortcut.OPEN_IN_STORE,
+            ),
     )
 
     override fun onBackPressed() {
