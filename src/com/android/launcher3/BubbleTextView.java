@@ -929,8 +929,15 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
 
     protected void drawSelectionBadgeIfNecessary(Canvas canvas) {
         if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
-            if (getTag() instanceof ItemInfo itemInfo && itemInfo.getTargetComponent() != null) {
-                String key = new com.android.launcher3.util.ComponentKey(itemInfo.getTargetComponent(), itemInfo.user).toString();
+            com.android.launcher3.util.ComponentKey componentKey = null;
+            if (getTag() instanceof ItemInfo itemInfo) {
+                componentKey = itemInfo.getComponentKey();
+            } else if (getTag() instanceof com.android.launcher3.model.data.AppInfo appInfo) {
+                componentKey = appInfo.toComponentKey();
+            }
+
+            if (componentKey != null) {
+                String key = componentKey.toString();
                 boolean isSelected = app.lawnchair.allapps.MultiSelectManager.INSTANCE.isSelected(key);
 
                 Rect iconBounds = new Rect();

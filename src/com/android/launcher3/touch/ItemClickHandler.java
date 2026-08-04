@@ -103,12 +103,13 @@ public class ItemClickHandler {
         if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()
                 && app.lawnchair.allapps.MultiSelectManager.INSTANCE.isHomescreenMode().getValue()) {
             Object tag = v.getTag();
-            if (tag instanceof ItemInfo itemInfo && itemInfo.getTargetComponent() != null) {
-                String key = new com.android.launcher3.util.ComponentKey(
-                        itemInfo.getTargetComponent(), itemInfo.user).toString();
-                app.lawnchair.allapps.MultiSelectManager.INSTANCE
-                        .toggleHomescreenSelection(key, itemInfo.id);
-                v.invalidate();
+            if (tag instanceof ItemInfo itemInfo) {
+                com.android.launcher3.util.ComponentKey ck = itemInfo.getComponentKey();
+                if (ck != null) {
+                    app.lawnchair.allapps.MultiSelectManager.INSTANCE
+                            .toggleHomescreenSelection(ck.toString(), itemInfo.id);
+                    v.invalidate();
+                }
             }
             return;
         }
