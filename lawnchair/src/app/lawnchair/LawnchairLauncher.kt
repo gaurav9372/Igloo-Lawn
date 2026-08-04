@@ -207,6 +207,11 @@ class LawnchairLauncher : QuickstepLauncher() {
         }.launchIn(scope = lifecycleScope)
         launcher.stateManager.addStateListener(clearSearchStateListener)
         launcher.stateManager.addStateListener(object : StateManager.StateListener<LauncherState> {
+            override fun onStateTransitionStart(toState: LauncherState) {
+                if (toState == LauncherState.NORMAL) {
+                    mAppsView?.reset(false)
+                }
+            }
             override fun onStateTransitionComplete(finalState: LauncherState) {
                 // Exit drawer multi-select when leaving ALL_APPS.
                 // Do NOT exit homescreen multi-select when on NORMAL state — it lives there.
