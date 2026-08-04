@@ -398,6 +398,8 @@ public class FloatingHeaderView extends LinearLayout implements
         mHeaderCollapsed = false;
         mTranslationY = 0;
         mSnappedScrolledY = 0;
+        setAlpha(1f);
+        setClipBounds(null);
         maybeSetTabVisibility(VISIBLE);
         if (animate) {
             mAnimator.setIntValues(mTranslationY, 0);
