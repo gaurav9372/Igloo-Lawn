@@ -337,7 +337,8 @@ public class FloatingHeaderView extends LinearLayout implements
     }
 
     protected void applyVerticalMove() {
-        int maxTranslation = mMaxTranslation - mCurrentRV.getSavedScrollPosition();
+        int savedScroll = mCurrentRV != null ? mCurrentRV.getSavedScrollPosition() : 0;
+        int maxTranslation = mMaxTranslation - savedScroll;
         int uncappedTranslationY = mTranslationY;
         mTranslationY = Math.max(mTranslationY, -maxTranslation);
 
@@ -405,6 +406,7 @@ public class FloatingHeaderView extends LinearLayout implements
         }
         mHeaderCollapsed = false;
         mSnappedScrolledY = -mMaxTranslation;
+        maybeSetTabVisibility(VISIBLE);
         if (mCurrentRV != null && !PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
             mCurrentRV.scrollToTop();
         }
