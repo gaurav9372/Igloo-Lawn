@@ -216,6 +216,9 @@ class LawnchairLauncher : QuickstepLauncher() {
                     // Entering drawer while homescreen multi-select is active → exit it.
                     MultiSelectManager.exitMultiSelect()
                 }
+                if (finalState == LauncherState.NORMAL) {
+                    mAppsView?.reset(false)
+                }
             }
         })
 
