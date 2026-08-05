@@ -847,7 +847,7 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
 
         int padding = (hideSearchBar && !mUsingTabs) ? 0 : mHeader.getMaxTranslation();
         mAH.forEach(adapterHolder -> {
-            adapterHolder.mPadding.top = padding;
+            adapterHolder.mPadding.top = adapterHolder.isSearch() ? 0 : padding;
             adapterHolder.applyPadding();
         });
         mAdditionalHeaderRows.forEach(row -> mHeader.onPluginConnected(row, mActivityContext));
