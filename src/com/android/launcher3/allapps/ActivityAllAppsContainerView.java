@@ -532,6 +532,9 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
                 && dragLayer.isEventOverView(rv.getScrollbar(), ev)) {
             return false;
         }
+        if (rv.isPullToSearchActive()) {
+            return false;
+        }
         // Scroll if not within the container view (e.g. over large-screen scrim).
         if (!dragLayer.isEventOverView(getVisibleContainerView(), ev)) {
             return true;

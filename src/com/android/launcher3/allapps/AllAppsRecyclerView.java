@@ -203,8 +203,8 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
             case android.view.MotionEvent.ACTION_DOWN: {
                 float y = ev.getY();
                 int height = getHeight();
-                // Check if touch starts under 30% of screen height / visible app drawer height
-                if (height > 0 && y <= height * 0.30f) {
+                // Check if touch starts in bottom 30% area of visible app drawer height (y >= 70% height)
+                if (height > 0 && y >= height * 0.70f) {
                     mPullStartY = y;
                     mPullGestureActive = true;
                 } else {
@@ -239,6 +239,10 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
                 break;
             }
         }
+    }
+
+    public boolean isPullToSearchActive() {
+        return mPullGestureActive;
     }
 
     @Override
