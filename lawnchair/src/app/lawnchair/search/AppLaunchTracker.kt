@@ -78,14 +78,16 @@ object AppLaunchTracker {
 
     private fun resolveAppInfos(context: Context, componentKeys: List<String>): List<AppInfo> {
         if (componentKeys.isEmpty()) return emptyList()
-        val appState = LauncherAppState.getInstance(context)
-        val allAppsList = appState.model.writer.allAppsList.data
-        val appMap = mutableMapOf<String, AppInfo>()
-        for (app in allAppsList) {
-            val keyStr = ComponentKey(app.componentName, app.user).toString()
-            appMap[keyStr] = app
+        val launcher = app.lawnchair.LawnchairLauncher.instance
+        if (launcher != null) {
+            val appsStore = launcher.appsView?.appsStore
+            if (appsStore != null) {
+                return componentKeys.mapNotNull { keyStr ->
+                    ComponentKey.fromString(keyStr)?.let { appsStore.getApp(it) as? AppInfo }
+                }
+            }
         }
-        return componentKeys.mapNotNull { appMap[it] }
+        return emptyList()
     }
 
     private fun loadEvents(prefs: SharedPreferences): List<LaunchEvent> {
