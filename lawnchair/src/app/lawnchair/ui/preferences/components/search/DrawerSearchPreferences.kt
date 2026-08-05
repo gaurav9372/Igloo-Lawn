@@ -67,6 +67,14 @@ fun DrawerSearchPreference(
         val searchAlgorithm = preferenceManager2().searchAlgorithm.getAdapter().state.value
         val navController = LocalNavController.current
         PreferenceGroup(heading = stringResource(id = R.string.show_search_result_types)) {
+            SwitchPreference(
+                adapter = prefs.searchResultRecentApps.getAdapter(),
+                label = "Recent apps",
+            )
+            SwitchPreference(
+                adapter = prefs.searchResultFrequentApps.getAdapter(),
+                label = "Frequent apps",
+            )
             if (searchAlgorithm != LawnchairSearchAlgorithm.ASI_SEARCH) {
                 val canDisable = searchAlgorithm != LawnchairSearchAlgorithm.APP_SEARCH
                 val adapter = prefs.searchResultApps.getAdapter()

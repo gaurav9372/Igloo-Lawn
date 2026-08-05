@@ -15,6 +15,8 @@ import com.android.launcher3.model.data.AppInfo
  */
 sealed interface SearchResult {
     data class App(val data: AppInfo) : SearchResult
+    data class RecentApp(val data: AppInfo) : SearchResult
+    data class FrequentApp(val data: AppInfo) : SearchResult
     data class Contact(val data: ContactInfo) : SearchResult
     data class File(val data: IFileInfo) : SearchResult
     data class Setting(val data: SettingInfo) : SearchResult

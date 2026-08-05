@@ -14,6 +14,9 @@ import app.lawnchair.search.algorithms.engine.ContactsSectionBuilder
 import app.lawnchair.search.algorithms.engine.EmptyStateSectionBuilder
 import app.lawnchair.search.algorithms.engine.FilesSectionBuilder
 import app.lawnchair.search.algorithms.engine.HistorySectionBuilder
+import app.lawnchair.search.AppLaunchTracker
+import app.lawnchair.search.algorithms.engine.FrequentAppsSectionBuilder
+import app.lawnchair.search.algorithms.engine.RecentAppsSectionBuilder
 import app.lawnchair.search.algorithms.engine.SearchProvider
 import app.lawnchair.search.algorithms.engine.SearchResult
 import app.lawnchair.search.algorithms.engine.SearchSettingsSectionBuilder
@@ -95,33 +98,45 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
 
         val prefs = PreferenceManager.getInstance(context)
         val historyEnabled = prefs.searchResulRecentSuggestion.get()
+        val showRecentApps = prefs.searchResultRecentApps.get()
+        val showFrequentApps = prefs.searchResultFrequentApps.get()
 
-        if (!historyEnabled) {
-            callback.clearSearchResult()
-        } else {
-            currentJob = coroutineScope.launch {
+        currentJob = coroutineScope.launch {
+            val resultsToTranslate = mutableListOf<SearchResult>()
+
+            if (showRecentApps) {
+                val recentApps = AppLaunchTracker.getRecentApps(context, 10)
+                recentApps.forEach { resultsToTranslate.add(SearchResult.RecentApp(it)) }
+            }
+
+            if (showFrequentApps) {
+                val frequentApps = AppLaunchTracker.getFrequentApps(context, 5)
+                frequentApps.forEach { resultsToTranslate.add(SearchResult.FrequentApp(it)) }
+            }
+
+            if (historyEnabled) {
                 val prefs2 = PreferenceManager2.getInstance(context)
                 val maxHistory = prefs2.maxRecentResultCount.firstCached()
-
                 val historyResults = historySearchProvider.getRecentKeywords(context, maxHistory)
+                resultsToTranslate.addAll(historyResults)
+            }
 
-                val resultsToTranslate = if (historyResults.isNotEmpty()) {
-                    historyResults + listOf(SearchResult.Action.SearchSettings)
-                } else {
-                    listOf(
-                        SearchResult.Action.EmptyState(
-                            titleRes = R.string.search_empty_state_title,
-                            subtitleRes = R.string.search_empty_state_no_history_subtitle,
-                        ),
-                        SearchResult.Action.SearchSettings,
-                    )
-                }
+            if (resultsToTranslate.isNotEmpty()) {
+                resultsToTranslate.add(SearchResult.Action.SearchSettings)
+            } else {
+                resultsToTranslate.add(
+                    SearchResult.Action.EmptyState(
+                        titleRes = R.string.search_empty_state_title,
+                        subtitleRes = R.string.search_empty_state_no_history_subtitle,
+                    ),
+                )
+                resultsToTranslate.add(SearchResult.Action.SearchSettings)
+            }
 
-                val searchTargets = translateToSearchTargets(resultsToTranslate)
-                val adapterItems = transformSearchResults(searchTargets)
-                withContext(Dispatchers.Main) {
-                    callback.onSearchResult("", ArrayList(adapterItems))
-                }
+            val searchTargets = translateToSearchTargets(resultsToTranslate)
+            val adapterItems = transformSearchResults(searchTargets)
+            withContext(Dispatchers.Main) {
+                callback.onSearchResult("", ArrayList(adapterItems))
             }
         }
     }
@@ -166,6 +181,8 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
     }
 
     private val sectionBuilders: List<SectionBuilder> = listOf(
+        RecentAppsSectionBuilder,
+        FrequentAppsSectionBuilder,
         AppsAndShortcutsSectionBuilder,
         CalculationSectionBuilder,
         WebSuggestionsSectionBuilder,

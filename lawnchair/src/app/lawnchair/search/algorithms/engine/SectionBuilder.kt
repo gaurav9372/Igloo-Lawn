@@ -186,6 +186,40 @@ data object ActionsSectionBuilder : SectionBuilder {
     }
 }
 
+data object RecentAppsSectionBuilder : SectionBuilder {
+    override fun build(
+        context: Context,
+        factory: SearchTargetFactory,
+        results: List<SearchResult>,
+    ): List<SearchTargetCompat> {
+        val recentApps = results.filterIsInstance<SearchResult.RecentApp>()
+        if (recentApps.isEmpty()) return emptyList()
+
+        val targets = mutableListOf<SearchTargetCompat>()
+        targets.add(factory.createHeaderTarget("Recent"))
+        targets.addAll(recentApps.map { factory.createAppSearchTarget(it.data, asRow = false) })
+        targets.add(factory.createHeaderTarget(SPACE))
+        return targets
+    }
+}
+
+data object FrequentAppsSectionBuilder : SectionBuilder {
+    override fun build(
+        context: Context,
+        factory: SearchTargetFactory,
+        results: List<SearchResult>,
+    ): List<SearchTargetCompat> {
+        val frequentApps = results.filterIsInstance<SearchResult.FrequentApp>()
+        if (frequentApps.isEmpty()) return emptyList()
+
+        val targets = mutableListOf<SearchTargetCompat>()
+        targets.add(factory.createHeaderTarget("Frequent"))
+        targets.addAll(frequentApps.map { factory.createAppSearchTarget(it.data, asRow = false) })
+        targets.add(factory.createHeaderTarget(SPACE))
+        return targets
+    }
+}
+
 data object AppsAndShortcutsSectionBuilder : SectionBuilder {
     override fun build(
         context: Context,

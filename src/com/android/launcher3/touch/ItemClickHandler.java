@@ -398,6 +398,9 @@ public class ItemClickHandler {
     private static void startAppShortcutOrInfoActivity(View v, ItemInfo item, Launcher launcher) {
         TestLogging.recordEvent(
                 TestProtocol.SEQUENCE_MAIN, "start: startAppShortcutOrInfoActivity");
+        if (item != null && item.getComponentKey() != null) {
+            app.lawnchair.search.AppLaunchTracker.INSTANCE.recordAppLaunch(launcher, item.getComponentKey().toString());
+        }
         Intent intent = item.getIntent();
         if (item instanceof ItemInfoWithIcon itemInfoWithIcon) {
             if ((itemInfoWithIcon.runtimeStatusFlags
