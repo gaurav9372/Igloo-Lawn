@@ -250,11 +250,17 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
         val currentPaddingLeft = initialPaddingLeft
         val currentPaddingRight = initialPaddingRight
 
-        // Activate zero search on tap
+        // Activate zero search and show keyboard on tap
         @SuppressLint("ClickableViewAccessibility")
         input.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_DOWN && !input.hasFocus()) {
-                setDirectFocus(true)
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                if (!input.hasFocus()) {
+                    setDirectFocus(true)
+                }
+            } else if (event.action == MotionEvent.ACTION_UP) {
+                input.post {
+                    input.showKeyboard()
+                }
             }
             false
         }
@@ -302,6 +308,9 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
             },
             afterTextChanged = {
                 updateHint()
+                if (it != null) {
+                    searchBarController.afterTextChanged(it)
+                }
                 if (input.text.isNullOrEmpty() && input.hasFocus() && !input.isResetting) {
                     searchAlgorithm?.doZeroStateSearch(this)
                 }

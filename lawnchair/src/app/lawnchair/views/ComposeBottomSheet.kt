@@ -221,7 +221,8 @@ class ComposeBottomSheet<T>(context: Context) : AbstractSlideInView<T>(context, 
             Surface(
                 modifier = Modifier
                     .widthIn(max = 640.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
                 shape = backgroundShape,
 
             ) {
