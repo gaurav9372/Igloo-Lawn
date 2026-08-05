@@ -273,7 +273,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     input.setHint(R.string.all_apps_search_bar_hint)
                 }
 
-                if (input.text.toString().isEmpty() && isDirectFocus) {
+                if (input.text.toString().isEmpty()) {
                     searchAlgorithm?.doZeroStateSearch(this)
                     setDirectFocus(false)
                 }

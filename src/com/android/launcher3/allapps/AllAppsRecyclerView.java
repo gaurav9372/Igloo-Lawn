@@ -226,6 +226,9 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
                         post(() -> {
                             ExtendedEditText editText = appsView.getSearchUiManager().getEditText();
                             if (editText != null) {
+                                if (editText instanceof SearchUiManager.SearchInputView) {
+                                    ((SearchUiManager.SearchInputView) editText).setDirectFocus(true);
+                                }
                                 editText.requestFocus();
                                 editText.showKeyboard();
                             }
