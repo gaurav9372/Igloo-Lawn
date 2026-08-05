@@ -101,16 +101,20 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
         val showRecentApps = prefs.searchResultRecentApps.get()
         val showFrequentApps = prefs.searchResultFrequentApps.get()
 
+        val cols = com.android.launcher3.LauncherAppState.getIDP(context).numAllAppsColumns
+        val recentCount = cols * 2
+        val frequentCount = cols
+
         currentJob = coroutineScope.launch {
             val resultsToTranslate = mutableListOf<SearchResult>()
 
             if (showRecentApps) {
-                val recentApps = AppLaunchTracker.getRecentApps(context, 10)
+                val recentApps = AppLaunchTracker.getRecentApps(context, recentCount)
                 recentApps.forEach { resultsToTranslate.add(SearchResult.RecentApp(it)) }
             }
 
             if (showFrequentApps) {
-                val frequentApps = AppLaunchTracker.getFrequentApps(context, 5)
+                val frequentApps = AppLaunchTracker.getFrequentApps(context, frequentCount)
                 frequentApps.forEach { resultsToTranslate.add(SearchResult.FrequentApp(it)) }
             }
 

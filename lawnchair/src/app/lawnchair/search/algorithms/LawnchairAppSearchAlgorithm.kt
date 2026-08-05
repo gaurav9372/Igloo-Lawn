@@ -75,11 +75,15 @@ class LawnchairAppSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm(c
             return
         }
 
+        val cols = com.android.launcher3.LauncherAppState.getIDP(context).numAllAppsColumns
+        val recentCount = cols * 2
+        val frequentCount = cols
+
         coroutineScope.launch(Dispatchers.Main) {
             val searchTargets = mutableListOf<SearchTargetCompat>()
 
             if (showRecentApps) {
-                val recentApps = app.lawnchair.search.AppLaunchTracker.getRecentApps(context, 10)
+                val recentApps = app.lawnchair.search.AppLaunchTracker.getRecentApps(context, recentCount)
                 if (recentApps.isNotEmpty()) {
                     searchTargets.add(searchTargetFactory.createHeaderTarget("Recent"))
                     searchTargets.addAll(recentApps.map { searchTargetFactory.createAppSearchTarget(it, false) })
@@ -88,7 +92,7 @@ class LawnchairAppSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm(c
             }
 
             if (showFrequentApps) {
-                val frequentApps = app.lawnchair.search.AppLaunchTracker.getFrequentApps(context, 5)
+                val frequentApps = app.lawnchair.search.AppLaunchTracker.getFrequentApps(context, frequentCount)
                 if (frequentApps.isNotEmpty()) {
                     searchTargets.add(searchTargetFactory.createHeaderTarget("Frequent"))
                     searchTargets.addAll(frequentApps.map { searchTargetFactory.createAppSearchTarget(it, false) })
