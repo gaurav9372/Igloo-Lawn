@@ -532,6 +532,17 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
                 && dragLayer.isEventOverView(rv.getScrollbar(), ev)) {
             return false;
         }
+        app.lawnchair.preferences2.PreferenceManager2 prefs2 = app.lawnchair.preferences2.PreferenceManager2.getInstance(getContext());
+        if (app.lawnchair.preferences2.PreferenceCacheExtensionsKt.firstCached(prefs2.getPullToSearchInDrawer(), prefs2)
+                && !isSearching()
+                && rv.computeVerticalScrollOffset() == 0) {
+            float[] loc = new float[]{ev.getX(), ev.getY()};
+            dragLayer.mapCoordInSelfToDescendant(rv, loc);
+            int rvHeight = rv.getHeight();
+            if (rvHeight > 0 && loc[1] >= rvHeight * 0.70f) {
+                return false;
+            }
+        }
         if (rv.isPullToSearchActive()) {
             return false;
         }
