@@ -464,8 +464,8 @@ fun SelectCategoryDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(16.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 24.dp),
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
@@ -571,8 +571,8 @@ fun BatchSelectCategorySheet(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(16.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 24.dp),
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
