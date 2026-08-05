@@ -16,19 +16,28 @@ import android.os.UserHandle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -462,12 +471,15 @@ fun SelectCategorySheet(
             )
         }
 
-        LazyColumn {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             item {
                 val isUnassigned = currentCategory == null
-                ClickablePreference(
+                CategoryRowItem(
                     label = "No Category",
-                    subtitle = if (isUnassigned) "Current selection" else null,
+                    subtitle = if (isUnassigned) "Current" else null,
+                    isSelected = isUnassigned,
                     onClick = {
                         scope.launch {
                             categoryService.moveAppToCategory(componentKeyString, 0)
@@ -480,9 +492,10 @@ fun SelectCategorySheet(
             items(categories) { category ->
                 val isSelected = currentCategory?.id == category.id
                 val count = category.itemComponentKeys.size
-                ClickablePreference(
+                CategoryRowItem(
                     label = category.title,
-                    subtitle = if (isSelected) "Current category ($count apps)" else "$count apps",
+                    subtitle = if (isSelected) "Current ($count apps)" else "$count apps",
+                    isSelected = isSelected,
                     onClick = {
                         scope.launch {
                             categoryService.moveAppToCategory(componentKeyString, category.id)
@@ -524,11 +537,14 @@ fun BatchSelectCategorySheet(
             modifier = Modifier.padding(bottom = 12.dp),
         )
 
-        LazyColumn {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             item {
-                ClickablePreference(
+                CategoryRowItem(
                     label = "No Category",
-                    subtitle = "Remove from categories",
+                    subtitle = "Remove",
+                    isSelected = false,
                     onClick = {
                         scope.launch {
                             categoryService.moveAppsToCategory(selectedKeys, 0)
@@ -540,9 +556,10 @@ fun BatchSelectCategorySheet(
             }
             items(categories) { category ->
                 val count = category.itemComponentKeys.size
-                ClickablePreference(
+                CategoryRowItem(
                     label = category.title,
-                    subtitle = "$count apps currently",
+                    subtitle = "$count apps",
+                    isSelected = false,
                     onClick = {
                         scope.launch {
                             categoryService.moveAppsToCategory(selectedKeys, category.id)
@@ -552,6 +569,58 @@ fun BatchSelectCategorySheet(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CategoryRowItem(
+    label: String,
+    subtitle: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
+    val contentColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val subtitleColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(containerColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = contentColor,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = subtitleColor,
+                maxLines = 1,
+            )
         }
     }
 }
