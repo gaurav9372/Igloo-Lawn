@@ -54,10 +54,23 @@ fun DrawerSearchPreference(
                 adapter = prefs2.autoShowKeyboardInDrawer.getAdapter(),
                 label = stringResource(id = R.string.pref_search_auto_show_keyboard),
             )
+            val pullToSearchEnabled = prefs2.pullToSearchInDrawer.getAdapter().state.value
             SwitchPreference(
                 adapter = prefs2.pullToSearchInDrawer.getAdapter(),
                 label = stringResource(id = R.string.pref_pull_to_search_in_drawer),
             )
+            if (pullToSearchEnabled) {
+                val percentageEntries = remember {
+                    listOf(20, 30, 40, 50).map { percent ->
+                        ListPreferenceEntry(percent) { "$percent%" }
+                    }
+                }
+                ListPreference(
+                    adapter = prefs2.pullToSearchAreaPercentage.getAdapter(),
+                    entries = percentageEntries,
+                    label = stringResource(id = R.string.pref_pull_to_search_area_title),
+                )
+            }
             SearchProvider(
                 context = context,
             )

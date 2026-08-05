@@ -539,7 +539,9 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
             float[] loc = new float[]{ev.getX(), ev.getY()};
             dragLayer.mapCoordInSelfToDescendant(rv, loc);
             int rvHeight = rv.getHeight();
-            if (rvHeight > 0 && loc[1] >= rvHeight * 0.70f) {
+            int percent = app.lawnchair.preferences2.PreferenceCacheExtensionsKt.firstCached(prefs2.getPullToSearchAreaPercentage(), prefs2);
+            float thresholdFraction = (100 - percent) / 100f;
+            if (rvHeight > 0 && loc[1] >= rvHeight * thresholdFraction) {
                 return false;
             }
         }

@@ -458,6 +458,11 @@ class PreferenceManager2 @Inject constructor(
         defaultValue = true,
     )
 
+    val pullToSearchAreaPercentage = preference(
+        key = intPreferencesKey(name = "pull_to_search_area_percentage"),
+        defaultValue = 40,
+    )
+
     val workspaceTextColor = preference(
         key = stringPreferencesKey(name = "workspace_text_color"),
         defaultValue = ColorMode.AUTO,
