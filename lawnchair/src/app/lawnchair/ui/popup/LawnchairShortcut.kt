@@ -462,14 +462,18 @@ fun SelectCategoryDialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
+            contentAlignment = Alignment.Center,
         ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+            ) {
             Column(
                 modifier = Modifier.padding(16.dp),
             ) {
@@ -541,6 +545,7 @@ fun SelectCategoryDialog(
         }
     }
 }
+}
 
 @Composable
 fun SelectCategorySheet(
@@ -569,14 +574,18 @@ fun BatchSelectCategorySheet(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
+            contentAlignment = Alignment.Center,
         ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+            ) {
             Column(
                 modifier = Modifier.padding(16.dp),
             ) {
@@ -643,6 +652,7 @@ fun BatchSelectCategorySheet(
             }
         }
     }
+}
 }
 
 @Composable
