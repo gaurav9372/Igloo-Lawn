@@ -159,6 +159,88 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
         scrollToTop();
     }
 
+    private float mPullStartY = -1f;
+    private boolean mPullGestureActive = false;
+
+    @Override
+    public boolean onInterceptTouchEvent(android.view.MotionEvent ev) {
+        handlePullToSearchTouch(ev);
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent ev) {
+        handlePullToSearchTouch(ev);
+        return super.onTouchEvent(ev);
+    }
+
+    private void handlePullToSearchTouch(android.view.MotionEvent ev) {
+        app.lawnchair.preferences2.PreferenceManager2 prefs2 = app.lawnchair.preferences2.PreferenceManager2.getInstance(getContext());
+        if (!app.lawnchair.preferences2.PreferenceCacheExtensionsKt.firstCached(prefs2.getPullToSearchInDrawer(), prefs2)) {
+            mPullStartY = -1f;
+            mPullGestureActive = false;
+            return;
+        }
+
+        ActivityContext activityContext = ActivityContext.lookupContext(getContext());
+        ActivityAllAppsContainerView<?> appsView = activityContext.getAppsView();
+
+        // Only trigger when app drawer is open and not already searching
+        if (appsView == null || appsView.isSearching()) {
+            mPullStartY = -1f;
+            mPullGestureActive = false;
+            return;
+        }
+
+        // Must be scrolled to top (computeVerticalScrollOffset == 0)
+        if (computeVerticalScrollOffset() > 0) {
+            mPullStartY = -1f;
+            mPullGestureActive = false;
+            return;
+        }
+
+        switch (ev.getActionMasked()) {
+            case android.view.MotionEvent.ACTION_DOWN: {
+                float y = ev.getY();
+                int height = getHeight();
+                // Check if touch starts under 30% of screen height / visible app drawer height
+                if (height > 0 && y <= height * 0.30f) {
+                    mPullStartY = y;
+                    mPullGestureActive = true;
+                } else {
+                    mPullStartY = -1f;
+                    mPullGestureActive = false;
+                }
+                break;
+            }
+            case android.view.MotionEvent.ACTION_MOVE: {
+                if (mPullGestureActive && mPullStartY >= 0) {
+                    float dy = ev.getY() - mPullStartY;
+                    // Trigger pull-to-search when pulled down past touch slop / threshold (e.g. 40dp)
+                    float threshold = 40f * getResources().getDisplayMetrics().density;
+                    if (dy > threshold) {
+                        mPullGestureActive = false;
+                        mPullStartY = -1f;
+                        post(() -> {
+                            ExtendedEditText editText = appsView.getSearchUiManager().getEditText();
+                            if (editText != null) {
+                                editText.requestFocus();
+                                editText.showKeyboard();
+                            }
+                        });
+                    }
+                }
+                break;
+            }
+            case android.view.MotionEvent.ACTION_UP:
+            case android.view.MotionEvent.ACTION_CANCEL: {
+                mPullStartY = -1f;
+                mPullGestureActive = false;
+                break;
+            }
+        }
+    }
+
     @Override
     public void onScrollStateChanged(int state) {
         super.onScrollStateChanged(state);

@@ -453,6 +453,11 @@ class PreferenceManager2 @Inject constructor(
         defaultValue = context.resources.getBoolean(R.bool.config_default_auto_show_keyboard_in_drawer),
     )
 
+    val pullToSearchInDrawer = preference(
+        key = booleanPreferencesKey(name = "pull_to_search_in_drawer"),
+        defaultValue = true,
+    )
+
     val workspaceTextColor = preference(
         key = stringPreferencesKey(name = "workspace_text_color"),
         defaultValue = ColorMode.AUTO,
