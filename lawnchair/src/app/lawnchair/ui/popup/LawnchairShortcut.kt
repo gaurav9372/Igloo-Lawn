@@ -27,9 +27,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.data.category.service.CategoryService
@@ -234,9 +239,9 @@ class LawnchairShortcut {
 
             ComposeBottomSheet.show(
                 context = launcher,
-                contentPaddings = PaddingValues(bottom = 32.dp),
+                contentPaddings = PaddingValues(bottom = 0.dp),
             ) {
-                SelectCategorySheet(
+                SelectCategoryDialog(
                     componentKeyString = componentKeyString,
                     appName = appName,
                     onClose = { close(true) },
@@ -437,7 +442,7 @@ class LawnchairShortcut {
 }
 
 @Composable
-fun SelectCategorySheet(
+fun SelectCategoryDialog(
     componentKeyString: String,
     appName: String,
     onClose: () -> Unit,
@@ -451,62 +456,101 @@ fun SelectCategorySheet(
         categories.find { it.itemComponentKeys.contains(componentKeyString) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Text(
-            text = stringResource(id = R.string.select_category_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        if (appName.isNotBlank()) {
-            Text(
-                text = appName,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-        }
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
         ) {
-            item {
-                val isUnassigned = currentCategory == null
-                CategoryRowItem(
-                    label = "No Category",
-                    subtitle = if (isUnassigned) "Current" else null,
-                    isSelected = isUnassigned,
-                    onClick = {
-                        scope.launch {
-                            categoryService.moveAppToCategory(componentKeyString, 0)
-                            Toast.makeText(context, "Moved to No Category", Toast.LENGTH_SHORT).show()
-                            onClose()
+            Column(
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(id = R.string.select_category_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (appName.isNotBlank()) {
+                            Text(
+                                text = appName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                    },
-                )
-            }
-            items(categories) { category ->
-                val isSelected = currentCategory?.id == category.id
-                val count = category.itemComponentKeys.size
-                CategoryRowItem(
-                    label = category.title,
-                    subtitle = if (isSelected) "Current ($count apps)" else "$count apps",
-                    isSelected = isSelected,
-                    onClick = {
-                        scope.launch {
-                            categoryService.moveAppToCategory(componentKeyString, category.id)
-                            Toast.makeText(context, "Moved to ${category.title}", Toast.LENGTH_SHORT).show()
-                            onClose()
-                        }
-                    },
-                )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = stringResource(id = android.R.string.cancel),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    item {
+                        val isUnassigned = currentCategory == null
+                        CategoryRowItem(
+                            label = "No Category",
+                            subtitle = if (isUnassigned) "Current" else null,
+                            isSelected = isUnassigned,
+                            onClick = {
+                                scope.launch {
+                                    categoryService.moveAppToCategory(componentKeyString, 0)
+                                    Toast.makeText(context, "Moved to No Category", Toast.LENGTH_SHORT).show()
+                                    onClose()
+                                }
+                            },
+                        )
+                    }
+                    items(categories) { category ->
+                        val isSelected = currentCategory?.id == category.id
+                        val count = category.itemComponentKeys.size
+                        CategoryRowItem(
+                            label = category.title,
+                            subtitle = if (isSelected) "Current ($count apps)" else "$count apps",
+                            isSelected = isSelected,
+                            onClick = {
+                                scope.launch {
+                                    categoryService.moveAppToCategory(componentKeyString, category.id)
+                                    Toast.makeText(context, "Moved to ${category.title}", Toast.LENGTH_SHORT).show()
+                                    onClose()
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+fun SelectCategorySheet(
+    componentKeyString: String,
+    appName: String,
+    onClose: () -> Unit,
+) {
+    SelectCategoryDialog(
+        componentKeyString = componentKeyString,
+        appName = appName,
+        onClose = onClose,
+    )
 }
 
 @Composable
@@ -519,55 +563,81 @@ fun BatchSelectCategorySheet(
     val categoryService = remember { CategoryService.INSTANCE.get(context) }
     val categories by categoryService.getCategoriesFlow().collectAsStateWithLifecycle(initialValue = emptyList())
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Text(
-            text = stringResource(id = R.string.select_category_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Text(
-            text = "Moving ${selectedKeys.size} apps",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
         ) {
-            item {
-                CategoryRowItem(
-                    label = "No Category",
-                    subtitle = "Remove",
-                    isSelected = false,
-                    onClick = {
-                        scope.launch {
-                            categoryService.moveAppsToCategory(selectedKeys, 0)
-                            Toast.makeText(context, "Moved ${selectedKeys.size} apps to No Category", Toast.LENGTH_SHORT).show()
-                            onClose()
-                        }
-                    },
-                )
-            }
-            items(categories) { category ->
-                val count = category.itemComponentKeys.size
-                CategoryRowItem(
-                    label = category.title,
-                    subtitle = "$count apps",
-                    isSelected = false,
-                    onClick = {
-                        scope.launch {
-                            categoryService.moveAppsToCategory(selectedKeys, category.id)
-                            Toast.makeText(context, "Moved ${selectedKeys.size} apps to ${category.title}", Toast.LENGTH_SHORT).show()
-                            onClose()
-                        }
-                    },
-                )
+            Column(
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(id = R.string.select_category_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "Moving ${selectedKeys.size} apps",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = stringResource(id = android.R.string.cancel),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    item {
+                        CategoryRowItem(
+                            label = "No Category",
+                            subtitle = "Remove",
+                            isSelected = false,
+                            onClick = {
+                                scope.launch {
+                                    categoryService.moveAppsToCategory(selectedKeys, 0)
+                                    Toast.makeText(context, "Moved ${selectedKeys.size} apps to No Category", Toast.LENGTH_SHORT).show()
+                                    onClose()
+                                }
+                            },
+                        )
+                    }
+                    items(categories) { category ->
+                        val count = category.itemComponentKeys.size
+                        CategoryRowItem(
+                            label = category.title,
+                            subtitle = "$count apps",
+                            isSelected = false,
+                            onClick = {
+                                scope.launch {
+                                    categoryService.moveAppsToCategory(selectedKeys, category.id)
+                                    Toast.makeText(context, "Moved ${selectedKeys.size} apps to ${category.title}", Toast.LENGTH_SHORT).show()
+                                    onClose()
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
     }
