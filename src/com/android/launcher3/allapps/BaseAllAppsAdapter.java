@@ -185,6 +185,13 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
          * as well. Returning true will prevent redrawing of thee item.
          */
         public boolean isContentSame(AdapterItem other) {
+            if (other == null || other.viewType != viewType) return false;
+            if (folderInfo != null && other.folderInfo != null) {
+                if (folderInfo.getContents().size() != other.folderInfo.getContents().size()) {
+                    return false;
+                }
+                return java.util.Objects.equals(folderInfo.title, other.folderInfo.title);
+            }
             return itemInfo == null && other.itemInfo == null;
         }
 

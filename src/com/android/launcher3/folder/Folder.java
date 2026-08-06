@@ -1308,6 +1308,44 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     @Override
     public void onDropCompleted(final View target, final DragObject d,
             final boolean success) {
+        if (isInAppDrawer()) {
+            if (success && d != null && d.dragInfo instanceof AppInfo) {
+                AppInfo appInfo = (AppInfo) d.dragInfo;
+                mInfo.getContents().remove(d.dragInfo);
+                final int folderId = mInfo.id;
+                final String folderTitle = mInfo.title != null ? mInfo.title.toString() : "Folder";
+                List<String> remainingKeys = new ArrayList<>();
+                for (ItemInfo item : mInfo.getContents()) {
+                    if (item instanceof AppInfo) {
+                        remainingKeys.add(((AppInfo) item).toComponentKey().toString());
+                    }
+                }
+                Executors.MODEL_EXECUTOR.post(() -> {
+                    try {
+                        app.lawnchair.data.folder.service.FolderService folderService =
+                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(getContext());
+                        if (remainingKeys.size() < 2) {
+                            kotlinx.coroutines.BuildersKt.runBlocking(
+                                    kotlinx.coroutines.Dispatchers.getIO(),
+                                    (scope, continuation) -> folderService.deleteFolderInfo(folderId, continuation)
+                            );
+                        } else {
+                            kotlinx.coroutines.BuildersKt.runBlocking(
+                                    kotlinx.coroutines.Dispatchers.getIO(),
+                                    (scope, continuation) -> folderService.updateFolderWithItems(folderId, folderTitle, remainingKeys, continuation)
+                            );
+                        }
+                    } catch (Exception ignored) { }
+                });
+            }
+            if (isOpen()) {
+                close(true);
+            }
+            mDeleteFolderOnDropCompleted = false;
+            mIsDragInProgress = false;
+            mCurrentDragView = null;
+            return;
+        }
         if (success) {
             if (getItemCount() <= 1) {
                 mDeleteFolderOnDropCompleted = true;
