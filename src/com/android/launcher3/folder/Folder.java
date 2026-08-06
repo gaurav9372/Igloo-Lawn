@@ -528,7 +528,7 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     }
 
     public boolean isInAppDrawer() {
-        return mInfo.container < 0 || mInfo.container == ItemInfo.NO_ID || mInfo.container == LauncherSettings.Favorites.CONTAINER_ALL_APPS;
+        return mInfo.container < 0 || mInfo.container == ItemInfo.NO_ID || mInfo.container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
     }
 
     @Override
