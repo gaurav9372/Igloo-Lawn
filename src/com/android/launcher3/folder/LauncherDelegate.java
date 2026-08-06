@@ -79,12 +79,10 @@ public class LauncherDelegate {
                     if (cellLayout == null) {
                         app.lawnchair.data.folder.service.FolderService folderService =
                                 app.lawnchair.data.folder.service.FolderService.INSTANCE.get(mLauncher);
-                        mLauncher.getMainExecutor().execute(() -> {
-                            kotlinx.coroutines.BuildersKt.launch$default(
-                                    mLauncher.getLifecycleScope(),
-                                    null, null,
-                                    (scope, continuation) -> folderService.deleteFolderInfo(info.id, continuation),
-                                    3, null
+                        com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
+                            kotlinx.coroutines.BuildersKt.runBlocking(
+                                    kotlinx.coroutines.Dispatchers.getIO(),
+                                    (scope, continuation) -> folderService.deleteFolderInfo(info.id, continuation)
                             );
                         });
                         if (folder.isOpen()) {
