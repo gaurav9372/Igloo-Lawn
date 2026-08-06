@@ -229,6 +229,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                         val folderInfo = FolderInfo().apply {
                                             id = targetFolder.id
                                             title = targetFolder.title
+                                            container = ItemInfo.NO_ID
                                             folderApps.forEach { add(it) }
                                         }
                                         val folderAdapterItem = AdapterItem.asFolder(folderInfo)
@@ -311,6 +312,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                     val folderInfo = FolderInfo().apply {
                                         id = targetFolder.id
                                         title = targetFolder.title
+                                        container = ItemInfo.NO_ID
                                         folderApps.forEach { add(it) }
                                     }
                                     val folderAdapterItem = AdapterItem.asFolder(folderInfo)
@@ -350,6 +352,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 } else {
                     val folderInfo = FolderInfo().apply {
                         title = category
+                        container = ItemInfo.NO_ID
                         apps.forEach { add(it) }
                     }
                     mAdapterItems.add(AdapterItem.asFolder(folderInfo))
@@ -379,6 +382,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                 val folderInfo = FolderInfo().apply {
                                     id = targetFolder.id
                                     title = targetFolder.title
+                                    container = ItemInfo.NO_ID
                                     resolvedApps.forEach { add(it) }
                                 }
                                 mAdapterItems.add(AdapterItem.asFolder(folderInfo))
@@ -428,7 +432,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
                     hiddenApps.contains(key)
                 }
-                (visibleCategoryApps + uninstalledCategoryApps + hiddenCategoryApps).distinct()
+                (visibleCategoryApps + hiddenCategoryApps).distinct()
             }
 
             categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, allCategoryApps)
@@ -449,8 +453,8 @@ class LawnchairAlphabeticalAppsList<T>(
             }
         }
 
+        prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
         if (noCategoryKeys.isNotEmpty()) {
-            prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
             context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(noCategoryKeys)
             }
@@ -466,6 +470,12 @@ class LawnchairAlphabeticalAppsList<T>(
                     app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(targetAppKey, catId)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to move dragged app to target category", e)
+                }
+            } else if (targetCategoryId == "no_category") {
+                try {
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(listOf(draggedAppKey, targetAppKey))
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to remove component keys from categories", e)
                 }
             }
             val folderId = app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).createFolderWithItems(
@@ -490,6 +500,12 @@ class LawnchairAlphabeticalAppsList<T>(
                     app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to move dragged app to target category", e)
+                }
+            } else if (targetCategoryId == "no_category") {
+                try {
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(listOf(draggedAppKey))
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to remove component keys from categories", e)
                 }
             }
             val existingEntry = folderList.find { it.id == folderId }

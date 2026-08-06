@@ -206,6 +206,23 @@ public class FolderInfo extends CollectionInfo {
         if (modelWriter != null) {
             modelWriter.updateItemInDatabase(this);
         }
+        if (this.id > 0 && this.title != null) {
+            final int folderId = this.id;
+            final String folderTitle = this.title.toString();
+            com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
+                try {
+                    android.content.Context context = modelWriter != null ? modelWriter.getContext() : null;
+                    if (context != null) {
+                        app.lawnchair.data.folder.service.FolderService folderService =
+                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context);
+                        kotlinx.coroutines.BuildersKt.runBlocking(
+                                kotlinx.coroutines.Dispatchers.getIO(),
+                                (scope, continuation) -> folderService.renameFolderInfo(folderId, folderTitle, continuation)
+                        );
+                    }
+                } catch (Exception ignored) { }
+            });
+        }
     }
 
     /**

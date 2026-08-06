@@ -73,6 +73,7 @@ class AllAppsCategoryTouchHelperCallback(
         }
 
         val pos = viewHolder.bindingAdapterPosition
+        if (pos == RecyclerView.NO_POSITION) return makeMovementFlags(0, 0)
         val items = list.adapterItems
         if (pos in items.indices) {
             val item = items[pos]
