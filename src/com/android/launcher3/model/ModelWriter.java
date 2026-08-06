@@ -96,6 +96,10 @@ public class ModelWriter {
         mUiExecutor = Executors.MAIN_EXECUTOR;
     }
 
+    public Context getContext() {
+        return mContext;
+    }
+
     /** Updates the location properties of the item */
     public void updateItemInfoProps(
             ItemInfo item, int container, int screenId, int cellX, int cellY) {

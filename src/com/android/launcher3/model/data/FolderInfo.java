@@ -206,13 +206,12 @@ public class FolderInfo extends CollectionInfo {
         if (modelWriter != null) {
             modelWriter.updateItemInDatabase(this);
         }
-        if (this.id > 0 && this.title != null) {
+        if (this.id > 0 && this.title != null && modelWriter != null) {
             final int folderId = this.id;
             final String folderTitle = this.title.toString();
+            final android.content.Context context = modelWriter.getContext();
             com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
                 try {
-                    com.android.launcher3.LauncherAppState appState = com.android.launcher3.LauncherAppState.getInstanceNoCreate();
-                    android.content.Context context = appState != null ? appState.getContext() : null;
                     if (context != null) {
                         app.lawnchair.data.folder.service.FolderService folderService =
                                 app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context);
