@@ -130,10 +130,6 @@ class AllAppsCategoryTouchHelperCallback(
         hasMovedBeyondSlop = true
         cancelMenuTimer()
 
-        if (activeHoverHolder != null) {
-            return false
-        }
-
         val fromPos = viewHolder.bindingAdapterPosition
         val toPos = target.bindingAdapterPosition
         val items = list.adapterItems
@@ -143,16 +139,16 @@ class AllAppsCategoryTouchHelperCallback(
         val fromItem = items[fromPos]
         val toItem = items[toPos]
 
+        // When moving over an icon or folder, do NOT reorder automatically.
+        // Return false so the target icon stays stationary for folder creation on drop.
+        if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
+            return false
+        }
+
         if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !fromItem.categoryId.isNullOrEmpty()) {
-            val targetCatId = when {
-                (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) && !toItem.categoryId.isNullOrEmpty() -> toItem.categoryId
-                toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER -> {
-                    val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
-                    targetCat?.id?.toString() ?: "no_category"
-                }
-                else -> null
-            }
-            if (targetCatId != null) {
+            if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
+                val targetCatId = targetCat?.id?.toString() ?: "no_category"
                 if (fromItem.categoryId != targetCatId) {
                     fromItem.categoryId = targetCatId
                 }
