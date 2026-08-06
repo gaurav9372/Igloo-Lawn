@@ -118,7 +118,6 @@ class AllAppsCategoryTouchHelperCallback(
             draggingHolder = null
             draggingView = null
             hasMovedBeyondSlop = false
-            clearHoverTarget()
         }
     }
 
@@ -308,6 +307,9 @@ class AllAppsCategoryTouchHelperCallback(
                 if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
                     val targetAppKey = targetItem.itemInfo?.toComponentKey()?.toString()
                     if (draggedAppKey != null && targetAppKey != null && draggedAppKey != targetAppKey) {
+                        viewHolder.itemView.scaleX = 1.0f
+                        viewHolder.itemView.scaleY = 1.0f
+                        viewHolder.itemView.elevation = 0f
                         list.createFolderWithApps(targetAppKey, draggedAppKey, targetCategoryId)
                         return
                     }
@@ -315,6 +317,9 @@ class AllAppsCategoryTouchHelperCallback(
                     val folderId = targetItem.folderInfo?.id
                     val folderTitle = targetItem.folderInfo?.title?.toString() ?: "Folder"
                     if (draggedAppKey != null && folderId != null) {
+                        viewHolder.itemView.scaleX = 1.0f
+                        viewHolder.itemView.scaleY = 1.0f
+                        viewHolder.itemView.elevation = 0f
                         list.addAppToFolder(folderId, folderTitle, draggedAppKey, targetCategoryId)
                         return
                     }
