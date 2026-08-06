@@ -555,7 +555,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (mAccessibilityDragListener != null) {
             mAccessibilityDragListener.onDragStart(dragObject, options);
         }
-        if (!mLauncher.isInState(EDIT_MODE)) {
+        if (!mLauncher.isInState(EDIT_MODE) && !mLauncher.isInState(com.android.launcher3.LauncherState.ALL_APPS)) {
             mLauncher.getStateManager().goToState(SPRING_LOADED);
         }
         mStatsLogManager.logger().withItemInfo(dragObject.dragInfo)
