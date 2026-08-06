@@ -356,7 +356,10 @@ class LawnchairAlphabeticalAppsList<T>(
                 }.flatMap { item ->
                     when (item.viewType) {
                         BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
-                        BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.contents?.mapNotNull { it.toComponentKey()?.toString() } ?: emptyList()
+                        BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
+                            (itemInfo as? AppInfo)?.toComponentKey()?.toString()
+                                ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
+                        } ?: emptyList()
                         else -> emptyList()
                     }
                 }
@@ -382,7 +385,10 @@ class LawnchairAlphabeticalAppsList<T>(
         }.flatMap { item ->
             when (item.viewType) {
                 BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
-                BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.contents?.mapNotNull { it.toComponentKey()?.toString() } ?: emptyList()
+                BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
+                    (itemInfo as? AppInfo)?.toComponentKey()?.toString()
+                        ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
+                } ?: emptyList()
                 else -> emptyList()
             }
         }
