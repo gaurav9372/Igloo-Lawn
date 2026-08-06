@@ -70,31 +70,44 @@ public class LauncherDelegate {
                 int itemCount = folder.getItemCount();
                 FolderInfo info = folder.mInfo;
                 if (itemCount <= 1) {
+                    CellLayout cellLayout = null;
+                    try {
+                        cellLayout = mLauncher.getCellLayout(info.container,
+                                mLauncher.getCellPosMapper().mapModelToPresenter(info).screenId);
+                    } catch (Exception ignored) { }
+
+                    if (cellLayout == null) {
+                        app.lawnchair.data.folder.service.FolderService folderService =
+                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(mLauncher);
+                        mLauncher.getMainExecutor().execute(() -> {
+                            kotlinx.coroutines.BuildersKt.launch$default(
+                                    mLauncher.getLifecycleScope(),
+                                    null, null,
+                                    (scope, continuation) -> folderService.deleteFolderInfo(info.id, continuation),
+                                    3, null
+                            );
+                        });
+                        if (folder.isOpen()) {
+                            folder.close(true);
+                        }
+                        return;
+                    }
+
                     View newIcon = null;
                     ItemInfo finalItem = null;
 
                     if (itemCount == 1) {
-                        // Move the item from the folder to the workspace, in the position of the
-                        // folder
-                        CellLayout cellLayout = mLauncher.getCellLayout(info.container,
-                                mLauncher.getCellPosMapper().mapModelToPresenter(info).screenId);
                         finalItem =  info.getContents().remove(0);
                         newIcon = mLauncher.getItemInflater().inflateItem(finalItem, cellLayout);
                         mLauncher.getModelWriter().addOrMoveItemInDatabase(finalItem,
                                 info.container, info.screenId, info.cellX, info.cellY);
                     }
 
-                    // Remove the folder
                     mLauncher.removeItem(folder.mFolderIcon, info, true /* deleteFromDb */,
                             "folder removed because there's only 1 item in it");
 
                     if (newIcon != null) {
-                        // We add the child after removing the folder to prevent both from existing
-                        // at the same time in the CellLayout.  We need to add the new item with
-                        // addInScreenFromBind() to ensure that hotseat items are placed correctly.
                         mLauncher.getWorkspace().addInScreenFromBind(newIcon, info);
-
-                        // Focus the newly created child
                         newIcon.requestFocus();
                     }
                     if (finalItem != null) {

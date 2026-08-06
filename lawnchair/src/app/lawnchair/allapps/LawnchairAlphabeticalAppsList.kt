@@ -117,7 +117,29 @@ class LawnchairAlphabeticalAppsList<T>(
         viewModel.folders
             .onEach { folders ->
                 if (folders != null) {
-                    folderList = folders
+                    val seenSets = mutableSetOf<Set<String>>()
+                    val uniqueFolders = mutableListOf<FolderEntry>()
+                    val duplicateIdsToDelete = mutableListOf<Int>()
+
+                    folders.forEach { folder ->
+                        val itemSet = folder.itemComponentKeys.toSet()
+                        if (itemSet.size < 2 || seenSets.contains(itemSet)) {
+                            duplicateIdsToDelete.add(folder.id)
+                        } else {
+                            seenSets.add(itemSet)
+                            uniqueFolders.add(folder)
+                        }
+                    }
+
+                    if (duplicateIdsToDelete.isNotEmpty()) {
+                        context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            duplicateIdsToDelete.forEach { id ->
+                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(id)
+                            }
+                        }
+                    }
+
+                    folderList = uniqueFolders
                         .sortedBy {
                             val index = folderOrder.indexOf(it.id)
                             if (index == -1) Int.MAX_VALUE else index
