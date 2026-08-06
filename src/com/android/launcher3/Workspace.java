@@ -2009,6 +2009,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
      */
     @Override
     public boolean acceptDrop(DragObject d) {
+        if (mLauncher != null && mLauncher.isInState(com.android.launcher3.LauncherState.ALL_APPS)) {
+            return false;
+        }
         // If it's an external drop (e.g. from All Apps), check if it should be accepted
         CellLayout dropTargetLayout = mDropToLayout;
         if (d.dragSource != this) {

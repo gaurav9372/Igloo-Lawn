@@ -272,11 +272,13 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     }
 
     public void onDragEnter(ItemInfo dragInfo) {
-        if (mFolder.isDestroyed() || !willAcceptItem(dragInfo)) return;
-        CellLayoutLayoutParams lp = (CellLayoutLayoutParams) getLayoutParams();
-        CellLayout cl = (CellLayout) getParent().getParent();
+        if (mFolder.isDestroyed() || (dragInfo != null && !willAcceptItem(dragInfo))) return;
+        if (getLayoutParams() instanceof CellLayoutLayoutParams && getParent() != null && getParent().getParent() instanceof CellLayout) {
+            CellLayoutLayoutParams lp = (CellLayoutLayoutParams) getLayoutParams();
+            CellLayout cl = (CellLayout) getParent().getParent();
 
-        mBackground.animateToAccept(cl, lp.getCellX(), lp.getCellY());
+            mBackground.animateToAccept(cl, lp.getCellX(), lp.getCellY());
+        }
         mOpenAlarm.setOnAlarmListener(mOnOpenListener);
         if (SPRING_LOADING_ENABLED &&
                 ((dragInfo instanceof WorkspaceItemFactory)

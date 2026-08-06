@@ -1358,6 +1358,7 @@ public class Launcher extends StatefulActivity<LauncherState>
 
         // Setup the drag controller (drop targets have to be added in reverse order in priority)
         mDropTargetBar.setup(mDragController);
+        mDragController.addDropTarget(mAppsView);
         mAllAppsController.setupViews(mScrimView, mAppsView);
 
         mWorkspace.getPageIndicator().setShouldAutoHide(true);

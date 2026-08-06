@@ -131,7 +131,7 @@ import app.lawnchair.ui.StretchRecyclerViewContainer;
 public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         extends SpringRelativeLayout implements DragSource, Insettable,
         OnDeviceProfileChangeListener, PersonalWorkSlidingTabStrip.OnActivePageChangedListener,
-        ScrimView.ScrimDrawingController {
+        ScrimView.ScrimDrawingController, com.android.launcher3.DropTarget {
 
 
     private static final String TAG = "ActivityAllAppsContainerView";
@@ -1904,5 +1904,39 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         private boolean isMain() {
             return mType == MAIN;
         }
+    }
+
+    @Override
+    public boolean isDropEnabled() {
+        return true;
+    }
+
+    @Override
+    public boolean acceptDrop(com.android.launcher3.DropTarget.DragObject dragObject) {
+        return true;
+    }
+
+    @Override
+    public void onDrop(com.android.launcher3.DropTarget.DragObject dragObject, com.android.launcher3.dragndrop.DragOptions options) {
+        if (dragObject != null && dragObject.dragView != null) {
+            dragObject.dragView.remove();
+        }
+    }
+
+    @Override
+    public void onDragEnter(com.android.launcher3.DropTarget.DragObject dragObject) { }
+
+    @Override
+    public void onDragOver(com.android.launcher3.DropTarget.DragObject dragObject) { }
+
+    @Override
+    public void onDragExit(com.android.launcher3.DropTarget.DragObject dragObject) { }
+
+    @Override
+    public void prepareAccessibilityDrop() { }
+
+    @Override
+    public void getHitRectRelativeToDragLayer(android.graphics.Rect outRect) {
+        getGlobalVisibleRect(outRect);
     }
 }
