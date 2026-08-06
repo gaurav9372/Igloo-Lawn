@@ -1,4 +1,4 @@
-﻿package app.lawnchair.data.folder.service
+package app.lawnchair.data.folder.service
 
 import android.content.Context
 import app.lawnchair.data.AppDatabase
@@ -38,6 +38,19 @@ class FolderService @Inject constructor(
             )
         }
         folderDao.replaceFolderItems(folderInfoId, title, items)
+    }
+
+    suspend fun createFolderWithItems(title: String, componentKeys: List<String>): Int = withContext(Dispatchers.IO) {
+        val folderId = folderDao.insertFolder(FolderInfoEntity(title = title)).toInt()
+        val items = componentKeys.mapIndexed { index, componentKey ->
+            FolderItemEntity(
+                folderId = folderId,
+                rank = index,
+                componentKey = componentKey,
+            )
+        }
+        folderDao.insertFolderItems(items)
+        folderId
     }
 
     suspend fun saveFolderInfo(title: String) = withContext(Dispatchers.IO) {

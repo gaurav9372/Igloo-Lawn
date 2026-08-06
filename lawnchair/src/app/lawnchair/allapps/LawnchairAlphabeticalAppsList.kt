@@ -181,13 +181,49 @@ class LawnchairAlphabeticalAppsList<T>(
                     mAdapterItems.add(headerItem)
                     position++
 
-                    resolvedApps.forEach { appInfo ->
-                        assignedAppKeys.add(appInfo.toComponentKey().toString())
-                        if (!isCollapsed) {
-                            val item = AdapterItem.asApp(appInfo)
-                            item.categoryId = categoryIdStr
-                            mAdapterItems.add(item)
-                            position++
+                    if (!isCollapsed) {
+                        val processedCategoryAppKeys = mutableSetOf<String>()
+
+                        folderList.forEach { folderEntry ->
+                            val folderApps = folderEntry.itemComponentKeys.mapNotNull { keyString ->
+                                if (!categoryEntry.itemComponentKeys.contains(keyString)) return@mapNotNull null
+                                if (hiddenApps.contains(keyString)) return@mapNotNull null
+                                val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                                appsStore.getApp(componentKey) as? AppInfo
+                            }
+
+                            if (folderApps.size >= 2) {
+                                val folderInfo = FolderInfo().apply {
+                                    id = folderEntry.id
+                                    title = folderEntry.title
+                                    folderApps.forEach { add(it) }
+                                }
+                                val folderAdapterItem = AdapterItem.asFolder(folderInfo)
+                                folderAdapterItem.categoryId = categoryIdStr
+                                mAdapterItems.add(folderAdapterItem)
+                                position++
+
+                                folderApps.forEach { appInfo ->
+                                    val key = appInfo.toComponentKey().toString()
+                                    processedCategoryAppKeys.add(key)
+                                    assignedAppKeys.add(key)
+                                }
+                            }
+                        }
+
+                        resolvedApps.forEach { appInfo ->
+                            val appKey = appInfo.toComponentKey().toString()
+                            assignedAppKeys.add(appKey)
+                            if (!processedCategoryAppKeys.contains(appKey)) {
+                                val item = AdapterItem.asApp(appInfo)
+                                item.categoryId = categoryIdStr
+                                mAdapterItems.add(item)
+                                position++
+                            }
+                        }
+                    } else {
+                        resolvedApps.forEach { appInfo ->
+                            assignedAppKeys.add(appInfo.toComponentKey().toString())
                         }
                     }
                 }
@@ -305,6 +341,51 @@ class LawnchairAlphabeticalAppsList<T>(
             prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
             context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(noCategoryKeys)
+            }
+        }
+    }
+
+    fun createFolderWithApps(targetAppKey: String, draggedAppKey: String, targetCategoryId: String?) {
+        context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
+                try {
+                    val catId = targetCategoryId.toInt()
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to move dragged app to target category", e)
+                }
+            }
+            app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).createFolderWithItems(
+                title = "Folder",
+                componentKeys = listOf(targetAppKey, draggedAppKey)
+            )
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onAppsUpdated()
+            }
+        }
+    }
+
+    fun addAppToFolder(folderId: Int, folderTitle: String, draggedAppKey: String, targetCategoryId: String?) {
+        context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
+                try {
+                    val catId = targetCategoryId.toInt()
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to move dragged app to target category", e)
+                }
+            }
+            val existingEntry = folderList.find { it.id == folderId }
+            val existingKeys = existingEntry?.itemComponentKeys ?: emptyList()
+            val updatedKeys = (existingKeys + draggedAppKey).distinct()
+
+            app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
+                folderInfoId = folderId,
+                title = folderTitle,
+                componentKeys = updatedKeys
+            )
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onAppsUpdated()
             }
         }
     }

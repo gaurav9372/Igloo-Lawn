@@ -41,6 +41,8 @@ class AllAppsCategoryTouchHelperCallback(
     private var hasMovedBeyondSlop = false
     private var isMenuShowing = false
 
+    private var activeHoverHolder: RecyclerView.ViewHolder? = null
+
     override fun isLongPressDragEnabled(): Boolean = true
 
     override fun isItemViewSwipeEnabled(): Boolean = false
@@ -108,6 +110,7 @@ class AllAppsCategoryTouchHelperCallback(
             draggingHolder = null
             draggingView = null
             hasMovedBeyondSlop = false
+            clearHoverTarget()
         }
     }
 
@@ -130,7 +133,7 @@ class AllAppsCategoryTouchHelperCallback(
 
         if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !fromItem.categoryId.isNullOrEmpty()) {
             val targetCatId = when {
-                toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !toItem.categoryId.isNullOrEmpty() -> toItem.categoryId
+                (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) && !toItem.categoryId.isNullOrEmpty() -> toItem.categoryId
                 toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER -> {
                     val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
                     targetCat?.id?.toString() ?: "no_category"
@@ -173,6 +176,72 @@ class AllAppsCategoryTouchHelperCallback(
             hasMovedBeyondSlop = true
             cancelMenuTimer()
         }
+
+        checkHoverTarget(recyclerView, viewHolder, dX, dY)
+    }
+
+    private fun checkHoverTarget(
+        recyclerView: RecyclerView,
+        draggedHolder: RecyclerView.ViewHolder,
+        dX: Float,
+        dY: Float,
+    ) {
+        val draggedView = draggedHolder.itemView
+        val dragCx = draggedView.left + dX + draggedView.width / 2f
+        val dragCy = draggedView.top + dY + draggedView.height / 2f
+
+        var newHoverTarget: RecyclerView.ViewHolder? = null
+        val items = list.adapterItems
+
+        for (i in 0 until recyclerView.childCount) {
+            val child = recyclerView.getChildAt(i) ?: continue
+            val childHolder = recyclerView.getChildViewHolder(child) ?: continue
+            if (childHolder == draggedHolder) continue
+
+            val pos = childHolder.bindingAdapterPosition
+            if (pos !in items.indices) continue
+            val item = items[pos]
+            if (item.viewType != BaseAllAppsAdapter.VIEW_TYPE_ICON && item.viewType != BaseAllAppsAdapter.VIEW_TYPE_FOLDER) continue
+
+            val targetCx = child.left + child.width / 2f
+            val targetCy = child.top + child.height / 2f
+            val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
+            val hoverRadius = child.width * 0.45f
+
+            if (dist < hoverRadius) {
+                newHoverTarget = childHolder
+                break
+            }
+        }
+
+        if (newHoverTarget != activeHoverHolder) {
+            clearHoverTarget()
+            if (newHoverTarget != null) {
+                activeHoverHolder = newHoverTarget
+                newHoverTarget.itemView.animate()
+                    .scaleX(1.18f)
+                    .scaleY(1.18f)
+                    .setDuration(120)
+                    .start()
+                val folderIcon = (newHoverTarget.itemView as? com.android.launcher3.folder.FolderIcon)
+                    ?: (newHoverTarget.itemView.findViewById(com.android.launcher3.R.id.folder_icon_name) as? View)?.parent as? com.android.launcher3.folder.FolderIcon
+                folderIcon?.onDragEnter(null)
+            }
+        }
+    }
+
+    private fun clearHoverTarget() {
+        activeHoverHolder?.let { holder ->
+            holder.itemView.animate()
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .setDuration(120)
+                .start()
+            val folderIcon = (holder.itemView as? com.android.launcher3.folder.FolderIcon)
+                ?: (holder.itemView.findViewById(com.android.launcher3.R.id.folder_icon_name) as? View)?.parent as? com.android.launcher3.folder.FolderIcon
+            folderIcon?.onDragExit()
+        }
+        activeHoverHolder = null
     }
 
     private fun cancelMenuTimer() {
@@ -213,6 +282,41 @@ class AllAppsCategoryTouchHelperCallback(
     override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
         super.clearView(recyclerView, viewHolder)
         cancelMenuTimer()
+
+        val hoverTarget = activeHoverHolder
+        clearHoverTarget()
+
+        if (hoverTarget != null) {
+            val items = list.adapterItems
+            val draggedPos = viewHolder.bindingAdapterPosition
+            val targetPos = hoverTarget.bindingAdapterPosition
+
+            if (draggedPos in items.indices && targetPos in items.indices) {
+                val draggedItem = items[draggedPos]
+                val targetItem = items[targetPos]
+
+                if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
+                    val draggedAppKey = draggedItem.itemInfo?.toComponentKey()?.toString()
+                    val targetCategoryId = targetItem.categoryId
+
+                    if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
+                        val targetAppKey = targetItem.itemInfo?.toComponentKey()?.toString()
+                        if (draggedAppKey != null && targetAppKey != null) {
+                            list.createFolderWithApps(targetAppKey, draggedAppKey, targetCategoryId)
+                            return
+                        }
+                    } else if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
+                        val folderId = targetItem.folderInfo?.id
+                        val folderTitle = targetItem.folderInfo?.title?.toString() ?: "Folder"
+                        if (draggedAppKey != null && folderId != null) {
+                            list.addAppToFolder(folderId, folderTitle, draggedAppKey, targetCategoryId)
+                            return
+                        }
+                    }
+                }
+            }
+        }
+
         if (!isMenuShowing) {
             viewHolder.itemView.animate()
                 .scaleX(1.0f)
