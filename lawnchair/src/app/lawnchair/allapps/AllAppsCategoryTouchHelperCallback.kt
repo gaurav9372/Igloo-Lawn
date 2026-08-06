@@ -43,7 +43,7 @@ class AllAppsCategoryTouchHelperCallback(
 
     private var activeHoverHolder: RecyclerView.ViewHolder? = null
     private var hoverTargetItem: BaseAllAppsAdapter.AdapterItem? = null
-    private var draggedAdapterItem: BaseAllAppsAdapter.AdapterItem? = null
+    private var initialDraggedItem: BaseAllAppsAdapter.AdapterItem? = null
 
     private val scrollListener = object : RecyclerView.OnScrollListener() {
         override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
@@ -76,7 +76,7 @@ class AllAppsCategoryTouchHelperCallback(
         val items = list.adapterItems
         if (pos in items.indices) {
             val item = items[pos]
-            if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !item.categoryId.isNullOrEmpty()) {
+            if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || item.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
                 val dragFlags = ItemTouchHelper.UP or ItemTouchHelper.DOWN or
                     ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
                 return makeMovementFlags(dragFlags, 0)
@@ -94,6 +94,9 @@ class AllAppsCategoryTouchHelperCallback(
             draggingView = viewHolder.itemView
             hasMovedBeyondSlop = false
             isMenuShowing = false
+
+            val pos = viewHolder.bindingAdapterPosition
+            initialDraggedItem = list.adapterItems.getOrNull(pos)
 
             viewHolder.itemView.animate()
                 .scaleX(1.15f)
@@ -212,10 +215,10 @@ class AllAppsCategoryTouchHelperCallback(
             val item = items[pos]
             if (item.viewType != BaseAllAppsAdapter.VIEW_TYPE_ICON && item.viewType != BaseAllAppsAdapter.VIEW_TYPE_FOLDER) continue
 
-            val targetCx = child.left + child.width / 2f
-            val targetCy = child.top + child.height / 2f
+            val targetCx = child.left + child.translationX + child.width / 2f
+            val targetCy = child.top + child.translationY + child.height / 2f
             val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
-            val hoverRadius = child.width * 0.45f
+            val hoverRadius = child.width * 0.60f
 
             if (dist < hoverRadius) {
                 newHoverTarget = childHolder
@@ -228,9 +231,7 @@ class AllAppsCategoryTouchHelperCallback(
             if (newHoverTarget != null) {
                 activeHoverHolder = newHoverTarget
                 val targetPos = newHoverTarget.bindingAdapterPosition
-                val draggedPos = draggedHolder.bindingAdapterPosition
                 hoverTargetItem = items.getOrNull(targetPos)
-                draggedAdapterItem = items.getOrNull(draggedPos)
 
                 newHoverTarget.itemView.animate()
                     .scaleX(1.18f)
@@ -257,7 +258,6 @@ class AllAppsCategoryTouchHelperCallback(
         }
         activeHoverHolder = null
         hoverTargetItem = null
-        draggedAdapterItem = null
     }
 
     private fun cancelMenuTimer() {
@@ -300,8 +300,9 @@ class AllAppsCategoryTouchHelperCallback(
         cancelMenuTimer()
 
         val targetItem = hoverTargetItem
-        val draggedItem = draggedAdapterItem
+        val draggedItem = initialDraggedItem
         clearHoverTarget()
+        initialDraggedItem = null
 
         if (targetItem != null && draggedItem != null && targetItem != draggedItem) {
             if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {

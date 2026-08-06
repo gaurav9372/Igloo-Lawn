@@ -362,7 +362,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 componentKeys = listOf(targetAppKey, draggedAppKey)
             )
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                onAppsUpdated()
+                updateAdapterItems()
             }
         }
     }
@@ -387,7 +387,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 componentKeys = updatedKeys
             )
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                onAppsUpdated()
+                updateAdapterItems()
             }
         }
     }
