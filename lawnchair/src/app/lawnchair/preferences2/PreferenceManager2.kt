@@ -364,6 +364,17 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.recreate() },
     )
 
+    val categoriesAsAccordions = preference(
+        key = booleanPreferencesKey(name = "all_apps_categories_as_accordions"),
+        defaultValue = context.resources.getBoolean(R.bool.config_default_categories_as_accordions),
+        onSet = { reloadHelper.recreate() },
+    )
+
+    val collapsedCategories = preference(
+        key = stringSetPreferencesKey(name = "collapsed_category_ids"),
+        defaultValue = setOf(),
+    )
+
     val showTopShadow = preference(
         key = booleanPreferencesKey(name = "show_top_shadow"),
         defaultValue = context.resources.getBoolean(R.bool.config_default_show_top_shadow),

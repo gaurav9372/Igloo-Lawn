@@ -207,6 +207,11 @@ fun AppDrawerPreferences(
                 label = stringResource(id = R.string.pref_all_apps_show_scrollbar_title),
                 adapter = prefs2.showScrollbar.getAdapter(),
             )
+            SwitchPreference(
+                label = stringResource(id = R.string.pref_categories_as_accordions_title),
+                description = stringResource(id = R.string.pref_categories_as_accordions_description),
+                adapter = prefs2.categoriesAsAccordions.getAdapter(),
+            )
         }
     }
 }

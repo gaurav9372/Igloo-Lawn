@@ -46,6 +46,7 @@ class LawnchairAlphabeticalAppsList<T>(
     where T : Context, T : ActivityContext {
 
     private var hiddenApps: Set<String> = setOf()
+    private var categoriesAsAccordions: Boolean = false
     private val prefs2 = PreferenceManager2.getInstance(context)
     private val prefs = PreferenceManager.getInstance(context)
 
@@ -57,8 +58,23 @@ class LawnchairAlphabeticalAppsList<T>(
     )
     private var folderList = mutableListOf<FolderEntry>()
     var categoryList = mutableListOf<CategoryEntry>()
+    private var collapsedCategories: Set<String> = setOf()
     private val filteredList = mutableListOf<AppInfo>()
     var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
+
+    fun toggleCategoryCollapsed(categoryId: String) {
+        val updated = collapsedCategories.toMutableSet()
+        if (updated.contains(categoryId)) {
+            updated.remove(categoryId)
+        } else {
+            updated.add(categoryId)
+        }
+        collapsedCategories = updated
+        context.launcher.lifecycleScope.launch {
+            prefs2.collapsedCategories.set(updated)
+        }
+        updateAdapterItems()
+    }
 
     private val folderOrder get() = FolderOrderUtils.stringToIntList(prefs.drawerListOrder.get())
 
@@ -72,6 +88,22 @@ class LawnchairAlphabeticalAppsList<T>(
             }
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to initialize hidden apps", t)
+        }
+        try {
+            prefs2.categoriesAsAccordions.onEach(launchIn = context.launcher.lifecycleScope) {
+                categoriesAsAccordions = it
+                updateAdapterItems()
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to initialize categoriesAsAccordions", t)
+        }
+        try {
+            prefs2.collapsedCategories.onEach(launchIn = context.launcher.lifecycleScope) {
+                collapsedCategories = it
+                updateAdapterItems()
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to initialize collapsedCategories", t)
         }
         observeFolders()
         observeCategories()
@@ -129,6 +161,7 @@ class LawnchairAlphabeticalAppsList<T>(
         if (categoryList.isNotEmpty()) {
             val validApps = appList.mapNotNull { it }
             val assignedAppKeys = mutableSetOf<String>()
+            val isAccordion = categoriesAsAccordions
 
             categoryList.forEach { categoryEntry ->
                 val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
@@ -138,14 +171,24 @@ class LawnchairAlphabeticalAppsList<T>(
                 }
 
                 if (resolvedApps.isNotEmpty()) {
-                    mAdapterItems.add(AdapterItem.asCategoryHeader(categoryEntry.title, resolvedApps.size))
+                    val categoryIdStr = categoryEntry.id.toString()
+                    val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
+                    val headerItem = AdapterItem.asCategoryHeader(categoryEntry.title, resolvedApps.size).apply {
+                        categoryId = categoryIdStr
+                        this.isAccordion = isAccordion
+                        this.isCollapsed = isCollapsed
+                    }
+                    mAdapterItems.add(headerItem)
                     position++
+
                     resolvedApps.forEach { appInfo ->
-                        val item = AdapterItem.asApp(appInfo)
-                        item.categoryId = categoryEntry.id.toString()
-                        mAdapterItems.add(item)
-                        position++
                         assignedAppKeys.add(appInfo.toComponentKey().toString())
+                        if (!isCollapsed) {
+                            val item = AdapterItem.asApp(appInfo)
+                            item.categoryId = categoryIdStr
+                            mAdapterItems.add(item)
+                            position++
+                        }
                     }
                 }
             }
@@ -163,13 +206,23 @@ class LawnchairAlphabeticalAppsList<T>(
             }
 
             if (unassignedApps.isNotEmpty()) {
-                mAdapterItems.add(AdapterItem.asCategoryHeader("No Category", unassignedApps.size))
+                val categoryIdStr = "no_category"
+                val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
+                val headerItem = AdapterItem.asCategoryHeader("No Category", unassignedApps.size).apply {
+                    categoryId = categoryIdStr
+                    this.isAccordion = isAccordion
+                    this.isCollapsed = isCollapsed
+                }
+                mAdapterItems.add(headerItem)
                 position++
-                unassignedApps.forEach { appInfo ->
-                    val item = AdapterItem.asApp(appInfo)
-                    item.categoryId = "no_category"
-                    mAdapterItems.add(item)
-                    position++
+
+                if (!isCollapsed) {
+                    unassignedApps.forEach { appInfo ->
+                        val item = AdapterItem.asApp(appInfo)
+                        item.categoryId = categoryIdStr
+                        mAdapterItems.add(item)
+                        position++
+                    }
                 }
             }
             return position
@@ -220,14 +273,24 @@ class LawnchairAlphabeticalAppsList<T>(
 
     fun persistCategoryChanges() {
         val updatedList = categoryList.map { categoryEntry ->
-            val visibleCategoryApps = mAdapterItems.filter {
-                it.categoryId == categoryEntry.id.toString() && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
-            }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
+            val categoryIdStr = categoryEntry.id.toString()
+            val allCategoryApps = if (collapsedCategories.contains(categoryIdStr)) {
+                categoryEntry.itemComponentKeys
+            } else {
+                val visibleCategoryApps = mAdapterItems.filter {
+                    it.categoryId == categoryIdStr && it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
+                }.mapNotNull { it.itemInfo?.toComponentKey()?.toString() }
 
-            val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
-                hiddenApps.contains(key)
+                val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                    val ck = ComponentKey.fromString(key)
+                    ck == null || appsStore.getApp(ck) == null
+                }
+
+                val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                    hiddenApps.contains(key)
+                }
+                (visibleCategoryApps + uninstalledCategoryApps + hiddenCategoryApps).distinct()
             }
-            val allCategoryApps = (visibleCategoryApps + hiddenCategoryApps).distinct()
 
             categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, allCategoryApps)
             categoryEntry.copy(itemComponentKeys = allCategoryApps)

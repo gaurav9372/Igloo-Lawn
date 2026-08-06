@@ -155,6 +155,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         }
 
         public int categoryAppCount = -1;
+        public boolean isAccordion = false;
+        public boolean isCollapsed = false;
 
         public static AdapterItem asCategoryHeader(String title, int count) {
             AdapterItem item = new AdapterItem(VIEW_TYPE_CATEGORY_HEADER);
@@ -334,6 +336,18 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
                 headerLayout.addView(titleView);
                 headerLayout.addView(countView);
+
+                android.widget.ImageView arrowView = new android.widget.ImageView(mActivityContext);
+                arrowView.setId(R.id.category_header_arrow);
+                int arrowSize = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, mActivityContext.getResources().getDisplayMetrics());
+                LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams(arrowSize, arrowSize);
+                arrowParams.setMarginStart((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, mActivityContext.getResources().getDisplayMetrics()));
+                arrowView.setLayoutParams(arrowParams);
+                arrowView.setImageResource(R.drawable.ic_chevron_down);
+                arrowView.setImageTintList(android.content.res.ColorStateList.valueOf(Themes.getAttrColor(mActivityContext, android.R.attr.textColorSecondary)));
+                arrowView.setVisibility(View.GONE);
+                headerLayout.addView(arrowView);
+
                 return new ViewHolder(headerLayout);
             }
             default:
@@ -430,6 +444,7 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 ViewGroup headerLayout = (ViewGroup) holder.itemView;
                 TextView tvTitle = headerLayout.findViewById(R.id.category_header_title);
                 TextView tvCount = headerLayout.findViewById(R.id.category_header_count);
+                android.widget.ImageView ivArrow = headerLayout.findViewById(R.id.category_header_arrow);
 
                 if (tvTitle != null) {
                     tvTitle.setText(item.sectionTitle);
@@ -442,6 +457,27 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                     } else {
                         tvCount.setVisibility(View.GONE);
                     }
+                }
+                if (ivArrow != null) {
+                    if (item.isAccordion) {
+                        ivArrow.setVisibility(View.VISIBLE);
+                        ivArrow.setRotation(item.isCollapsed ? -90f : 0f);
+                    } else {
+                        ivArrow.setVisibility(View.GONE);
+                    }
+                }
+                if (item.isAccordion && item.categoryId != null) {
+                    headerLayout.setClickable(true);
+                    headerLayout.setFocusable(true);
+                    headerLayout.setOnClickListener(v -> {
+                        if (mApps instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                            ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList<?>) mApps).toggleCategoryCollapsed(item.categoryId);
+                        }
+                    });
+                } else {
+                    headerLayout.setClickable(false);
+                    headerLayout.setFocusable(false);
+                    headerLayout.setOnClickListener(null);
                 }
                 break;
             }
