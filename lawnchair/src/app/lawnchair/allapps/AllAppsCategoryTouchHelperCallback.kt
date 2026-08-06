@@ -42,6 +42,8 @@ class AllAppsCategoryTouchHelperCallback(
     private var isMenuShowing = false
 
     private var activeHoverHolder: RecyclerView.ViewHolder? = null
+    private var hoverTargetItem: BaseAllAppsAdapter.AdapterItem? = null
+    private var draggedAdapterItem: BaseAllAppsAdapter.AdapterItem? = null
 
     private val scrollListener = object : RecyclerView.OnScrollListener() {
         override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
@@ -124,6 +126,10 @@ class AllAppsCategoryTouchHelperCallback(
     ): Boolean {
         hasMovedBeyondSlop = true
         cancelMenuTimer()
+
+        if (activeHoverHolder != null) {
+            return false
+        }
 
         val fromPos = viewHolder.bindingAdapterPosition
         val toPos = target.bindingAdapterPosition
@@ -221,6 +227,11 @@ class AllAppsCategoryTouchHelperCallback(
             clearHoverTarget()
             if (newHoverTarget != null) {
                 activeHoverHolder = newHoverTarget
+                val targetPos = newHoverTarget.bindingAdapterPosition
+                val draggedPos = draggedHolder.bindingAdapterPosition
+                hoverTargetItem = items.getOrNull(targetPos)
+                draggedAdapterItem = items.getOrNull(draggedPos)
+
                 newHoverTarget.itemView.animate()
                     .scaleX(1.18f)
                     .scaleY(1.18f)
@@ -245,6 +256,8 @@ class AllAppsCategoryTouchHelperCallback(
             folderIcon?.onDragExit()
         }
         activeHoverHolder = null
+        hoverTargetItem = null
+        draggedAdapterItem = null
     }
 
     private fun cancelMenuTimer() {
@@ -286,35 +299,27 @@ class AllAppsCategoryTouchHelperCallback(
         super.clearView(recyclerView, viewHolder)
         cancelMenuTimer()
 
-        val hoverTarget = activeHoverHolder
+        val targetItem = hoverTargetItem
+        val draggedItem = draggedAdapterItem
         clearHoverTarget()
 
-        if (hoverTarget != null) {
-            val items = list.adapterItems
-            val draggedPos = viewHolder.bindingAdapterPosition
-            val targetPos = hoverTarget.bindingAdapterPosition
+        if (targetItem != null && draggedItem != null && targetItem != draggedItem) {
+            if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
+                val draggedAppKey = draggedItem.itemInfo?.toComponentKey()?.toString()
+                val targetCategoryId = targetItem.categoryId
 
-            if (draggedPos in items.indices && targetPos in items.indices) {
-                val draggedItem = items[draggedPos]
-                val targetItem = items[targetPos]
-
-                if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
-                    val draggedAppKey = draggedItem.itemInfo?.toComponentKey()?.toString()
-                    val targetCategoryId = targetItem.categoryId
-
-                    if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
-                        val targetAppKey = targetItem.itemInfo?.toComponentKey()?.toString()
-                        if (draggedAppKey != null && targetAppKey != null) {
-                            list.createFolderWithApps(targetAppKey, draggedAppKey, targetCategoryId)
-                            return
-                        }
-                    } else if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
-                        val folderId = targetItem.folderInfo?.id
-                        val folderTitle = targetItem.folderInfo?.title?.toString() ?: "Folder"
-                        if (draggedAppKey != null && folderId != null) {
-                            list.addAppToFolder(folderId, folderTitle, draggedAppKey, targetCategoryId)
-                            return
-                        }
+                if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
+                    val targetAppKey = targetItem.itemInfo?.toComponentKey()?.toString()
+                    if (draggedAppKey != null && targetAppKey != null && draggedAppKey != targetAppKey) {
+                        list.createFolderWithApps(targetAppKey, draggedAppKey, targetCategoryId)
+                        return
+                    }
+                } else if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
+                    val folderId = targetItem.folderInfo?.id
+                    val folderTitle = targetItem.folderInfo?.title?.toString() ?: "Folder"
+                    if (draggedAppKey != null && folderId != null) {
+                        list.addAppToFolder(folderId, folderTitle, draggedAppKey, targetCategoryId)
+                        return
                     }
                 }
             }

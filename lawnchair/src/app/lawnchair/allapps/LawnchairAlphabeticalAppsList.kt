@@ -185,28 +185,32 @@ class LawnchairAlphabeticalAppsList<T>(
                         val processedCategoryAppKeys = mutableSetOf<String>()
 
                         folderList.forEach { folderEntry ->
-                            val folderApps = folderEntry.itemComponentKeys.mapNotNull { keyString ->
-                                if (!categoryEntry.itemComponentKeys.contains(keyString)) return@mapNotNull null
-                                if (hiddenApps.contains(keyString)) return@mapNotNull null
-                                val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                appsStore.getApp(componentKey) as? AppInfo
+                            val hasAppsInThisCategory = folderEntry.itemComponentKeys.any { key ->
+                                categoryEntry.itemComponentKeys.contains(key)
                             }
-
-                            if (folderApps.size >= 2) {
-                                val folderInfo = FolderInfo().apply {
-                                    id = folderEntry.id
-                                    title = folderEntry.title
-                                    folderApps.forEach { add(it) }
+                            if (hasAppsInThisCategory) {
+                                val folderApps = folderEntry.itemComponentKeys.mapNotNull { keyString ->
+                                    if (hiddenApps.contains(keyString)) return@mapNotNull null
+                                    val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                                    appsStore.getApp(componentKey) as? AppInfo
                                 }
-                                val folderAdapterItem = AdapterItem.asFolder(folderInfo)
-                                folderAdapterItem.categoryId = categoryIdStr
-                                mAdapterItems.add(folderAdapterItem)
-                                position++
 
-                                folderApps.forEach { appInfo ->
-                                    val key = appInfo.toComponentKey().toString()
-                                    processedCategoryAppKeys.add(key)
-                                    assignedAppKeys.add(key)
+                                if (folderApps.size >= 2) {
+                                    val folderInfo = FolderInfo().apply {
+                                        id = folderEntry.id
+                                        title = folderEntry.title
+                                        folderApps.forEach { add(it) }
+                                    }
+                                    val folderAdapterItem = AdapterItem.asFolder(folderInfo)
+                                    folderAdapterItem.categoryId = categoryIdStr
+                                    mAdapterItems.add(folderAdapterItem)
+                                    position++
+
+                                    folderApps.forEach { appInfo ->
+                                        val key = appInfo.toComponentKey().toString()
+                                        processedCategoryAppKeys.add(key)
+                                        assignedAppKeys.add(key)
+                                    }
                                 }
                             }
                         }
@@ -287,20 +291,18 @@ class LawnchairAlphabeticalAppsList<T>(
                     appsStore.getApp(componentKey) as? AppInfo
                 }
 
-                if (resolvedApps.size > 1) {
+                if (resolvedApps.size >= 2) {
                     val folderInfo = FolderInfo().apply {
+                        id = folderEntry.id
                         title = folderEntry.title
                         resolvedApps.forEach { add(it) }
                     }
                     mAdapterItems.add(AdapterItem.asFolder(folderInfo))
                     position++
-
-                    if (prefs.folderApps.get()) {
-                        filteredList.addAll(resolvedApps)
-                    }
+                    filteredList.addAll(resolvedApps)
                 }
             }
-            val remainingApps = appList.filterNot { app -> filteredList.contains(app) && prefs.folderApps.get() }
+            val remainingApps = appList.filterNot { app -> filteredList.contains(app) }
             position = super.addAppsWithSections(remainingApps, position)
         }
 
