@@ -211,7 +211,8 @@ public class FolderInfo extends CollectionInfo {
             final String folderTitle = this.title.toString();
             com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
                 try {
-                    android.content.Context context = modelWriter != null ? modelWriter.getContext() : null;
+                    com.android.launcher3.LauncherAppState appState = com.android.launcher3.LauncherAppState.getInstanceNoCreate();
+                    android.content.Context context = appState != null ? appState.getContext() : null;
                     if (context != null) {
                         app.lawnchair.data.folder.service.FolderService folderService =
                                 app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context);
