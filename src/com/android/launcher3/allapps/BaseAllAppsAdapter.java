@@ -304,15 +304,32 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         mActivityContext.getDeviceProfile().getAllAppsProfile().getCellHeightPx()));
                 return new ViewHolder(fl);
             case VIEW_TYPE_CATEGORY_HEADER: {
+                LinearLayout container = new LinearLayout(mActivityContext);
+                container.setOrientation(LinearLayout.VERTICAL);
+                container.setLayoutParams(new RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+
+                View dividerView = new View(mActivityContext);
+                dividerView.setId(R.id.category_header_divider);
+                int dividerMarginTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 3, mActivityContext.getResources().getDisplayMetrics());
+                int dividerMarginBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, mActivityContext.getResources().getDisplayMetrics());
+                int dividerMarginHoriz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
+                LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, 1);
+                dividerParams.setMargins(dividerMarginHoriz, dividerMarginTop, dividerMarginHoriz, dividerMarginBottom);
+                dividerView.setLayoutParams(dividerParams);
+                container.addView(dividerView);
+
                 LinearLayout headerLayout = new LinearLayout(mActivityContext);
                 headerLayout.setOrientation(LinearLayout.HORIZONTAL);
                 headerLayout.setGravity(Gravity.CENTER_VERTICAL);
-                headerLayout.setLayoutParams(new RecyclerView.LayoutParams(
+                headerLayout.setLayoutParams(new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
 
                 int paddingHoriz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
-                int paddingTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, mActivityContext.getResources().getDisplayMetrics());
+                int paddingTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
                 int paddingBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, mActivityContext.getResources().getDisplayMetrics());
                 headerLayout.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
 
@@ -348,7 +365,9 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 arrowView.setVisibility(View.GONE);
                 headerLayout.addView(arrowView);
 
-                return new ViewHolder(headerLayout);
+                container.addView(headerLayout);
+
+                return new ViewHolder(container);
             }
             default:
                 if (mAdapterProvider.isViewSupported(viewType)) {
@@ -441,10 +460,37 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 break;
             case VIEW_TYPE_CATEGORY_HEADER: {
                 AdapterItem item = mApps.getAdapterItems().get(position);
-                ViewGroup headerLayout = (ViewGroup) holder.itemView;
-                TextView tvTitle = headerLayout.findViewById(R.id.category_header_title);
-                TextView tvCount = headerLayout.findViewById(R.id.category_header_count);
-                android.widget.ImageView ivArrow = headerLayout.findViewById(R.id.category_header_arrow);
+                ViewGroup container = (ViewGroup) holder.itemView;
+                View vDivider = container.findViewById(R.id.category_header_divider);
+                TextView tvTitle = container.findViewById(R.id.category_header_title);
+                TextView tvCount = container.findViewById(R.id.category_header_count);
+                android.widget.ImageView ivArrow = container.findViewById(R.id.category_header_arrow);
+
+                boolean isFirstHeader = true;
+                for (int i = 0; i < position; i++) {
+                    if (mApps.getAdapterItems().get(i).viewType == VIEW_TYPE_CATEGORY_HEADER) {
+                        isFirstHeader = false;
+                        break;
+                    }
+                }
+
+                if (vDivider != null) {
+                    if (isFirstHeader) {
+                        vDivider.setVisibility(View.GONE);
+                    } else {
+                        vDivider.setVisibility(View.VISIBLE);
+                        int defaultBgColor = Themes.getAttrColor(mActivityContext, android.R.attr.colorBackground);
+                        int bgColor = app.lawnchair.util.LawnchairUtilsKt.getAllAppsBackgroundColor(mActivityContext, defaultBgColor);
+                        double luminance = androidx.core.graphics.ColorUtils.calculateLuminance(bgColor);
+                        int dividerColor;
+                        if (luminance < 0.5) {
+                            dividerColor = androidx.core.graphics.ColorUtils.setAlphaComponent(android.graphics.Color.WHITE, (int) (255 * 0.30f));
+                        } else {
+                            dividerColor = androidx.core.graphics.ColorUtils.setAlphaComponent(android.graphics.Color.BLACK, (int) (255 * 0.30f));
+                        }
+                        vDivider.setBackgroundColor(dividerColor);
+                    }
+                }
 
                 if (tvTitle != null) {
                     tvTitle.setText(item.sectionTitle);
@@ -467,17 +513,17 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                     }
                 }
                 if (item.isAccordion && item.categoryId != null) {
-                    headerLayout.setClickable(true);
-                    headerLayout.setFocusable(true);
-                    headerLayout.setOnClickListener(v -> {
+                    container.setClickable(true);
+                    container.setFocusable(true);
+                    container.setOnClickListener(v -> {
                         if (mApps instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
                             ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList<?>) mApps).toggleCategoryCollapsed(item.categoryId);
                         }
                     });
                 } else {
-                    headerLayout.setClickable(false);
-                    headerLayout.setFocusable(false);
-                    headerLayout.setOnClickListener(null);
+                    container.setClickable(false);
+                    container.setFocusable(false);
+                    container.setOnClickListener(null);
                 }
                 break;
             }

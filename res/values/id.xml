@@ -97,6 +97,7 @@
     <item type="id" name="category_header_title" />
     <item type="id" name="category_header_count" />
     <item type="id" name="category_header_arrow" />
+    <item type="id" name="category_header_divider" />
 
     <!-- Recents -->
     <item type="id" name="overview_panel"/>
