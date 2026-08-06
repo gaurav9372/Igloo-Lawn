@@ -43,6 +43,15 @@ class AllAppsCategoryTouchHelperCallback(
 
     private var activeHoverHolder: RecyclerView.ViewHolder? = null
 
+    private val scrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+            if (dy != 0 || dx != 0) {
+                hasMovedBeyondSlop = true
+                cancelMenuTimer()
+            }
+        }
+    }
+
     override fun isLongPressDragEnabled(): Boolean = true
 
     override fun isItemViewSwipeEnabled(): Boolean = false
@@ -52,15 +61,9 @@ class AllAppsCategoryTouchHelperCallback(
         viewHolder: RecyclerView.ViewHolder,
     ): Int {
         if (attachedRecyclerView != recyclerView) {
+            attachedRecyclerView?.removeOnScrollListener(scrollListener)
             attachedRecyclerView = recyclerView
-            recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                    if (dy != 0 || dx != 0) {
-                        hasMovedBeyondSlop = true
-                        cancelMenuTimer()
-                    }
-                }
-            })
+            recyclerView.addOnScrollListener(scrollListener)
         }
         val launcher = Launcher.getLauncher(recyclerView.context)
         if (launcher.appsView != null && launcher.appsView.isSearching) {
