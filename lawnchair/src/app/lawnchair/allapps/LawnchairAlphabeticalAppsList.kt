@@ -410,57 +410,64 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     fun persistCategoryChanges() {
+        val categoryKeyMap = mutableMapOf<String, MutableList<String>>()
+
+        mAdapterItems.forEach { item ->
+            val catId = item.categoryId
+            if (!catId.isNullOrEmpty()) {
+                val keys = when (item.viewType) {
+                    BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
+                    BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
+                        (itemInfo as? AppInfo)?.toComponentKey()?.toString()
+                            ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
+                    } ?: emptyList()
+                    else -> emptyList()
+                }
+                if (keys.isNotEmpty()) {
+                    categoryKeyMap.getOrPut(catId) { mutableListOf() }.addAll(keys)
+                }
+            }
+        }
+
+        val claimedKeys = mutableSetOf<String>()
+
         val updatedList = categoryList.map { categoryEntry ->
             val categoryIdStr = categoryEntry.id.toString()
-            val allCategoryApps = if (collapsedCategories.contains(categoryIdStr)) {
-                categoryEntry.itemComponentKeys
-            } else {
-                val visibleCategoryApps = mAdapterItems.filter {
-                    it.categoryId == categoryIdStr
-                }.flatMap { item ->
-                    when (item.viewType) {
-                        BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
-                        BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
-                            (itemInfo as? AppInfo)?.toComponentKey()?.toString()
-                                ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
-                        } ?: emptyList()
-                        else -> emptyList()
-                    }
-                }
+            val keysForThisCat = (categoryKeyMap[categoryIdStr] ?: emptyList())
+                .filterNot { claimedKeys.contains(it) }
 
-                val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
-                    val ck = ComponentKey.fromString(key)
-                    ck == null || appsStore.getApp(ck) == null
-                }
+            claimedKeys.addAll(keysForThisCat)
 
-                val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
-                    hiddenApps.contains(key)
-                }
-                (visibleCategoryApps + hiddenCategoryApps).distinct()
-            }
+            val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                val ck = ComponentKey.fromString(key)
+                ck == null || appsStore.getApp(ck) == null
+            }.filterNot { claimedKeys.contains(it) }
 
-            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, allCategoryApps)
-            categoryEntry.copy(itemComponentKeys = allCategoryApps)
+            val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                hiddenApps.contains(key)
+            }.filterNot { claimedKeys.contains(it) }
+
+            val finalKeys = (keysForThisCat + uninstalledCategoryApps + hiddenCategoryApps).distinct()
+            claimedKeys.addAll(finalKeys)
+
+            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, finalKeys)
+            categoryEntry.copy(itemComponentKeys = finalKeys)
         }
         categoryList = updatedList.toMutableList()
 
-        val noCategoryKeys = mAdapterItems.filter {
-            it.categoryId == "no_category"
-        }.flatMap { item ->
-            when (item.viewType) {
-                BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
-                BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
-                    (itemInfo as? AppInfo)?.toComponentKey()?.toString()
-                        ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
-                } ?: emptyList()
-                else -> emptyList()
-            }
-        }
+        val rawNoCatKeys = categoryKeyMap["no_category"] ?: emptyList()
+        val noCategoryKeys = rawNoCatKeys.filterNot { claimedKeys.contains(it) }.distinct()
 
         prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
+
         if (noCategoryKeys.isNotEmpty()) {
             context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(noCategoryKeys)
+                try {
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context)
+                        .removeComponentKeysFromAllCategories(noCategoryKeys)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to remove no_category keys from DB", e)
+                }
             }
         }
     }
