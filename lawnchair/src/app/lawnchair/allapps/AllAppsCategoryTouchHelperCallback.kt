@@ -284,9 +284,6 @@ class AllAppsCategoryTouchHelperCallback(
                     .scaleY(1.18f)
                     .setDuration(120)
                     .start()
-                val folderIcon = (newHoverTarget.itemView as? com.android.launcher3.folder.FolderIcon)
-                    ?: (newHoverTarget.itemView.findViewById(com.android.launcher3.R.id.folder_icon_name) as? View)?.parent as? com.android.launcher3.folder.FolderIcon
-                folderIcon?.onDragEnter(null)
             }
         }
     }
@@ -298,9 +295,6 @@ class AllAppsCategoryTouchHelperCallback(
                 .scaleY(1.0f)
                 .setDuration(120)
                 .start()
-            val folderIcon = (holder.itemView as? com.android.launcher3.folder.FolderIcon)
-                ?: (holder.itemView.findViewById(com.android.launcher3.R.id.folder_icon_name) as? View)?.parent as? com.android.launcher3.folder.FolderIcon
-            folderIcon?.onDragExit()
         }
         activeHoverHolder = null
         hoverTargetItem = null

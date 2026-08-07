@@ -115,7 +115,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
 
     @Thunk BubbleTextView mFolderName;
 
-    PreviewBackground mBackground = new PreviewBackground(getContext());
+    public PreviewBackground mBackground = new PreviewBackground(getContext());
     private boolean mBackgroundIsVisible = true;
 
     FolderGridOrganizer mPreviewVerifier;
