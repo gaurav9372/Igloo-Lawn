@@ -145,22 +145,30 @@ class AllAppsCategoryTouchHelperCallback(
         }
 
         val isFromMovable = fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER
-        val isToMovable = toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER
+        if (!isFromMovable) return false
 
-        if (isFromMovable && isToMovable) {
-            if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
-                val targetCatId = targetCat?.id?.toString() ?: "no_category"
-                fromItem.categoryId = targetCatId
-            } else if (!toItem.categoryId.isNullOrEmpty()) {
-                fromItem.categoryId = toItem.categoryId
-            }
+        // If target is a Category Header, allow moving across category section boundary
+        if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+            val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
+            val targetCatId = targetCat?.id?.toString() ?: "no_category"
+            fromItem.categoryId = targetCatId
 
             items.removeAt(fromPos)
             items.add(toPos, fromItem)
             recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
             return true
         }
+
+        // If target is an icon or folder in the SAME category, allow reordering within the category
+        val isToMovable = toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER
+        if (isToMovable && fromItem.categoryId == toItem.categoryId) {
+            items.removeAt(fromPos)
+            items.add(toPos, fromItem)
+            recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
+            return true
+        }
+
+        // Prevent shifting items in OTHER categories when dragging near category borders
         return false
     }
 
