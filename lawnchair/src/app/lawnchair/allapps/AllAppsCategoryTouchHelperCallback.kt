@@ -116,7 +116,6 @@ class AllAppsCategoryTouchHelperCallback(
             menuRunnable = runnable
             menuHandler.postDelayed(runnable, HOLD_MENU_DELAY_MS)
         } else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
-            clearHoverTarget()
             draggingHolder = null
             draggingView = null
             hasMovedBeyondSlop = false
