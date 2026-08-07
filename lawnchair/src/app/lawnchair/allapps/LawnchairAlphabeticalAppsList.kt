@@ -598,10 +598,20 @@ class LawnchairAlphabeticalAppsList<T>(
         val rv = context.launcher.appsView?.activeRecyclerView
         if (rv != null && rv.isComputingLayout) {
             rv.post {
-                try { action() } catch (e: Exception) { Log.w(TAG, "Safe notify failed", e) }
+                try {
+                    action()
+                    rv.adapter = adapter
+                } catch (e: Exception) {
+                    Log.w(TAG, "Safe notify failed", e)
+                }
             }
         } else {
-            try { action() } catch (e: Exception) { Log.w(TAG, "Safe notify failed", e) }
+            try {
+                action()
+                rv?.adapter = adapter
+            } catch (e: Exception) {
+                Log.w(TAG, "Safe notify failed", e)
+            }
         }
     }
 
