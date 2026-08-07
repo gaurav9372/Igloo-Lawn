@@ -471,14 +471,6 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
                 .log(LAUNCHER_FOLDER_AUTO_LABELED);
     }
 
-    public void onTitleChanged(CharSequence title) {
-        CharSequence displayTitle = android.text.TextUtils.isEmpty(title) ? "Folder" : title;
-        if (mFolderName != null) {
-            mFolderName.setText(displayTitle);
-        }
-        setContentDescription(getAccessiblityTitle(displayTitle));
-    }
-
 
     public void onDrop(DragObject d, boolean itemReturnedOnFailedDrop) {
         ItemInfo item;
@@ -707,8 +699,11 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     }
 
     public void onTitleChanged(CharSequence title) {
-        mFolderName.setText(title);
-        setContentDescription(getAccessiblityTitle(title));
+        CharSequence displayTitle = android.text.TextUtils.isEmpty(title) ? "Folder" : title;
+        if (mFolderName != null) {
+            mFolderName.setText(displayTitle);
+        }
+        setContentDescription(getAccessiblityTitle(displayTitle));
     }
 
     @Override
