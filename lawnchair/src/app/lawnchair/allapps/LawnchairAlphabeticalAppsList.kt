@@ -650,17 +650,23 @@ class LawnchairAlphabeticalAppsList<T>(
             targetItem.categoryId
         } ?: "no_category"
 
+        val effectivePos = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+            (targetPos + 1).coerceAtMost(mAdapterItems.size)
+        } else {
+            targetPos
+        }
+
         if (existingIndex == -1) {
             val newItem = AdapterItem.asApp(appInfo).apply {
                 categoryId = targetCatId
             }
-            mAdapterItems.add(targetPos, newItem)
-            adapter?.notifyItemInserted(targetPos)
-        } else if (existingIndex != targetPos) {
+            mAdapterItems.add(effectivePos, newItem)
+            adapter?.notifyItemInserted(effectivePos)
+        } else if (existingIndex != effectivePos) {
             val item = mAdapterItems.removeAt(existingIndex)
             item.categoryId = targetCatId
-            mAdapterItems.add(targetPos, item)
-            adapter?.notifyItemMoved(existingIndex, targetPos)
+            mAdapterItems.add(effectivePos, item)
+            adapter?.notifyItemMoved(existingIndex, effectivePos)
         }
     }
 
