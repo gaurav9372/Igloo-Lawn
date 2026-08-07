@@ -124,7 +124,21 @@ class LawnchairShortcut {
                 val key = ComponentKey(component, itemInfo.user)
                 val app = launcher.appsView?.appsStore?.getApp(key)
                 if (app != null) return app
-                return ModelAppInfo(launcher, component, itemInfo.user)
+                val launcherApps = launcher.getSystemService(LauncherApps::class.java)
+                val activityInfo = launcherApps?.getActivityList(component.packageName, itemInfo.user)
+                    ?.firstOrNull { it.componentName == component }
+                if (activityInfo != null) {
+                    return ModelAppInfo(launcher, activityInfo, itemInfo.user)
+                }
+                return ModelAppInfo().apply {
+                    componentName = component
+                    user = itemInfo.user
+                    intent = itemInfo.getIntent() ?: Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        setComponent(component)
+                    }
+                    title = itemInfo.title ?: ""
+                }
             }
             return null
         }
