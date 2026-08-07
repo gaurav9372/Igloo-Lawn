@@ -3,6 +3,7 @@ package app.lawnchair.allapps
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -25,6 +26,8 @@ class AllAppsCategoryTouchHelperCallback(
 ) : ItemTouchHelper.Callback() {
 
     private companion object {
+        private const val TAG = "CategoryTouchCallback"
+
         /** Touch slop in dp — if drag displacement exceeds this, treat as drag and cancel menu timer. */
         const val DRAG_TOUCH_SLOP_DP = 16f
 
