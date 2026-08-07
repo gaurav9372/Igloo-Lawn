@@ -335,7 +335,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         val drawerOnlyShortcuts = if (isInAppDrawer) {
             Stream.of(
                 LawnchairShortcut.ADD_TO_HOMESCREEN,
-                LawnchairShortcut.EDIT_CATEGORY,
             )
         } else {
             Stream.empty()
@@ -347,6 +346,7 @@ class LawnchairLauncher : QuickstepLauncher() {
                 Stream.of(
                     LawnchairShortcut.UNINSTALL,
                     LawnchairShortcut.CUSTOMIZE,
+                    LawnchairShortcut.EDIT_CATEGORY,
                     LawnchairShortcut.OPEN_IN_STORE,
                     LawnchairShortcut.MULTI_SELECT,
                 ),

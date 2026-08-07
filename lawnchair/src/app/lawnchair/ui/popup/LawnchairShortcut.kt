@@ -119,9 +119,14 @@ class LawnchairShortcut {
 
         private fun getAppInfo(launcher: LawnchairLauncher, itemInfo: ItemInfo): ModelAppInfo? {
             if (itemInfo is ModelAppInfo) return itemInfo
-            if (itemInfo.itemType != ITEM_TYPE_APPLICATION) return null
-            val key = ComponentKey(itemInfo.targetComponent, itemInfo.user)
-            return launcher.appsView.appsStore.getApp(key)
+            val component = itemInfo.targetComponent ?: itemInfo.getIntent()?.component
+            if (component != null) {
+                val key = ComponentKey(component, itemInfo.user)
+                val app = launcher.appsView?.appsStore?.getApp(key)
+                if (app != null) return app
+                return ModelAppInfo(launcher, component, itemInfo.user)
+            }
+            return null
         }
 
         val UNINSTALL =
