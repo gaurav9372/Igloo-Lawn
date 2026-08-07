@@ -648,7 +648,7 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
                     for (int i = 0; i < rv.getChildCount(); i++) {
                         View child = rv.getChildAt(i);
                         if (child instanceof FolderIcon icon) {
-                            if (icon.getFolderInfo() != null && mInfo != null && icon.getFolderInfo().id == mInfo.id) {
+                            if (icon.mInfo != null && mInfo != null && icon.mInfo.id == mInfo.id) {
                                 mFolderIcon = icon;
                                 break;
                             }
