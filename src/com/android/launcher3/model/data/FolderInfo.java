@@ -203,7 +203,7 @@ public class FolderInfo extends CollectionInfo {
         } else {
             options &= ~FLAG_MANUAL_FOLDER_NAME;
         }
-        boolean isAppDrawerFolder = container == CONTAINER_ALL_APPS || container < 0 || container == ItemInfo.NO_ID;
+        boolean isAppDrawerFolder = container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS || container < 0 || container == ItemInfo.NO_ID;
 
         if (!isAppDrawerFolder && modelWriter != null) {
             try {
@@ -216,7 +216,7 @@ public class FolderInfo extends CollectionInfo {
         if (this.id > 0 && this.title != null) {
             final int folderId = this.id;
             final String folderTitle = this.title.toString();
-            final android.content.Context context = modelWriter != null ? modelWriter.getContext() : com.android.launcher3.LauncherAppState.getInstanceNoCreate() != null ? com.android.launcher3.LauncherAppState.getInstanceNoCreate().getContext() : null;
+            final android.content.Context context = modelWriter != null ? modelWriter.getContext() : null;
             if (context != null) {
                 com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
                     try {
