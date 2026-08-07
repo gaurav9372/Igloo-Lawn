@@ -600,7 +600,6 @@ class LawnchairAlphabeticalAppsList<T>(
             rv.post {
                 try {
                     action()
-                    rv.adapter = adapter
                 } catch (e: Exception) {
                     Log.w(TAG, "Safe notify failed", e)
                 }
@@ -608,7 +607,6 @@ class LawnchairAlphabeticalAppsList<T>(
         } else {
             try {
                 action()
-                rv?.adapter = adapter
             } catch (e: Exception) {
                 Log.w(TAG, "Safe notify failed", e)
             }
