@@ -58,7 +58,8 @@ data class FolderAnimationData(
         fun Folder.getAnimationData(isOpening: Boolean): FolderAnimationData {
             /** Calculates all values required for Folder Animators. */
             // Position and Scale values
-            val iconView = getFolderIcon()
+            val layoutParams = layoutParams as BaseDragLayer.LayoutParams
+            val iconView = folderIcon
             val previewBackground = iconView.mBackground
 
             // Get items in Preview and their scaling

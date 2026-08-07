@@ -119,7 +119,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     private boolean mBackgroundIsVisible = true;
 
     FolderGridOrganizer mPreviewVerifier;
-    ClippedFolderIconLayoutRule mPreviewLayoutRule;
+    public ClippedFolderIconLayoutRule mPreviewLayoutRule;
     private PreviewItemManager mPreviewItemManager;
     private PreviewItemDrawingParams mTmpParams = new PreviewItemDrawingParams(0, 0, 0);
     private List<ItemInfo> mCurrentPreviewItems = new ArrayList<>();
