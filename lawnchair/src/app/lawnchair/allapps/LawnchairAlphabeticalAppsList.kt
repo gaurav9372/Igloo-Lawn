@@ -547,7 +547,9 @@ class LawnchairAlphabeticalAppsList<T>(
             val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
 
             val folderItem = mAdapterItems.find { it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId }
-            val categoryId = folderItem?.categoryId
+            val categoryId = folderItem?.categoryId ?: categoryList.find { cat ->
+                cat.itemComponentKeys.any { key -> currentKeys.contains(key) }
+            }?.id?.toString()
 
             if (remainingKeys.size < 2) {
                 try {

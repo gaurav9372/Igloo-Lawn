@@ -153,8 +153,21 @@ class AllAppsCategoryTouchHelperCallback(
 
         if (isToMovable) {
             val targetCatId = if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
-                targetCat?.id?.toString() ?: "no_category"
+                if (fromPos > toPos) {
+                    // Dragging UPWARDS across header: enter category above this header
+                    val headerIdx = list.categoryList.indexOfFirst { it.title == toItem.sectionTitle }
+                    if (headerIdx > 0) {
+                        list.categoryList[headerIdx - 1].id.toString()
+                    } else if (headerIdx == 0) {
+                        list.categoryList.firstOrNull()?.id?.toString() ?: "no_category"
+                    } else {
+                        "no_category"
+                    }
+                } else {
+                    // Dragging DOWNWARDS across header: enter category of this header
+                    val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
+                    targetCat?.id?.toString() ?: "no_category"
+                }
             } else {
                 toItem.categoryId
             }
