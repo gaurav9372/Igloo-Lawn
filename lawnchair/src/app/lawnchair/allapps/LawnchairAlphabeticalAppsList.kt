@@ -497,9 +497,11 @@ class LawnchairAlphabeticalAppsList<T>(
             folderList = (folderList.filterNot { it.id == folderId } + newEntry).toMutableList()
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                updateAdapterItems()
-                adapter?.notifyDataSetChanged()
-                persistCategoryChanges()
+                safeNotifyAdapter {
+                    updateAdapterItems()
+                    adapter?.notifyDataSetChanged()
+                    persistCategoryChanges()
+                }
             }
         }
     }
@@ -533,9 +535,11 @@ class LawnchairAlphabeticalAppsList<T>(
             folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                updateAdapterItems()
-                adapter?.notifyDataSetChanged()
-                persistCategoryChanges()
+                safeNotifyAdapter {
+                    updateAdapterItems()
+                    adapter?.notifyDataSetChanged()
+                    persistCategoryChanges()
+                }
             }
         }
     }
@@ -590,6 +594,17 @@ class LawnchairAlphabeticalAppsList<T>(
         }
     }
 
+    private fun safeNotifyAdapter(action: () -> Unit) {
+        val rv = itemTouchHelper?.attachedRecyclerView
+        if (rv != null && rv.isComputingLayout) {
+            rv.post {
+                try { action() } catch (e: Exception) { Log.w(TAG, "Safe notify failed", e) }
+            }
+        } else {
+            try { action() } catch (e: Exception) { Log.w(TAG, "Safe notify failed", e) }
+        }
+    }
+
     fun onAppRemovedFromFolder(draggedAppKey: String, folderId: Int) {
         val folderEntry = folderList.find { it.id == folderId }
         val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
@@ -599,36 +614,38 @@ class LawnchairAlphabeticalAppsList<T>(
             it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId
         }
 
-        if (remainingKeys.size < 2) {
-            folderList = folderList.filterNot { it.id == folderId }.toMutableList()
-            if (folderIndex != -1) {
-                val folderItem = mAdapterItems[folderIndex]
-                val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
-                    (info as? AppInfo)?.toComponentKey()?.toString() != draggedAppKey
-                } as? AppInfo
+        safeNotifyAdapter {
+            if (remainingKeys.size < 2) {
+                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
+                if (folderIndex != -1) {
+                    val folderItem = mAdapterItems[folderIndex]
+                    val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
+                        (info as? AppInfo)?.toComponentKey()?.toString() != draggedAppKey
+                    } as? AppInfo
 
-                if (remainingInfo != null) {
-                    val standaloneItem = AdapterItem.asApp(remainingInfo).apply {
-                        categoryId = folderItem.categoryId
+                    if (remainingInfo != null) {
+                        val standaloneItem = AdapterItem.asApp(remainingInfo).apply {
+                            categoryId = folderItem.categoryId
+                        }
+                        mAdapterItems[folderIndex] = standaloneItem
+                        adapter?.notifyItemChanged(folderIndex)
+                    } else {
+                        mAdapterItems.removeAt(folderIndex)
+                        adapter?.notifyItemRemoved(folderIndex)
                     }
-                    mAdapterItems[folderIndex] = standaloneItem
+                }
+            } else {
+                val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
+                if (updatedEntry != null) {
+                    folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+                }
+                if (folderIndex != -1) {
+                    val folderItem = mAdapterItems[folderIndex]
+                    folderItem.folderInfo?.getContents()?.removeIf { info ->
+                        (info as? AppInfo)?.toComponentKey()?.toString() == draggedAppKey
+                    }
                     adapter?.notifyItemChanged(folderIndex)
-                } else {
-                    mAdapterItems.removeAt(folderIndex)
-                    adapter?.notifyItemRemoved(folderIndex)
                 }
-            }
-        } else {
-            val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
-            if (updatedEntry != null) {
-                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
-            }
-            if (folderIndex != -1) {
-                val folderItem = mAdapterItems[folderIndex]
-                folderItem.folderInfo?.getContents()?.removeIf { info ->
-                    (info as? AppInfo)?.toComponentKey()?.toString() == draggedAppKey
-                }
-                adapter?.notifyItemChanged(folderIndex)
             }
         }
     }
@@ -642,37 +659,86 @@ class LawnchairAlphabeticalAppsList<T>(
 
         if (targetPos !in mAdapterItems.indices) return
 
-        val targetItem = mAdapterItems[targetPos]
-        val targetCatId = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-            val targetCat = categoryList.find { it.title == targetItem.sectionTitle }
-            targetCat?.id?.toString() ?: "no_category"
-        } else {
-            targetItem.categoryId
-        } ?: "no_category"
+        var resolvedCatId: String? = null
+        for (i in targetPos downTo 0) {
+            val item = mAdapterItems.getOrNull(i)
+            if (item != null) {
+                if (!item.categoryId.isNullOrEmpty()) {
+                    resolvedCatId = item.categoryId
+                    break
+                }
+                if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                    val cat = categoryList.find { it.title == item.sectionTitle }
+                    if (cat != null) {
+                        resolvedCatId = cat.id.toString()
+                        break
+                    }
+                }
+            }
+        }
+        val targetCatId = resolvedCatId ?: "no_category"
 
+        val targetItem = mAdapterItems[targetPos]
         val effectivePos = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
             (targetPos + 1).coerceAtMost(mAdapterItems.size)
         } else {
             targetPos
         }
 
-        if (existingIndex == -1) {
-            val newItem = AdapterItem.asApp(appInfo).apply {
-                categoryId = targetCatId
+        safeNotifyAdapter {
+            if (existingIndex == -1) {
+                val newItem = AdapterItem.asApp(appInfo).apply {
+                    categoryId = targetCatId
+                }
+                mAdapterItems.add(effectivePos, newItem)
+                adapter?.notifyItemInserted(effectivePos)
+            } else if (existingIndex != effectivePos) {
+                val item = mAdapterItems.removeAt(existingIndex)
+                item.categoryId = targetCatId
+                mAdapterItems.add(effectivePos, item)
+                adapter?.notifyItemMoved(existingIndex, effectivePos)
             }
-            mAdapterItems.add(effectivePos, newItem)
-            adapter?.notifyItemInserted(effectivePos)
-        } else if (existingIndex != effectivePos) {
-            val item = mAdapterItems.removeAt(existingIndex)
-            item.categoryId = targetCatId
-            mAdapterItems.add(effectivePos, item)
-            adapter?.notifyItemMoved(existingIndex, effectivePos)
         }
     }
 
     fun onAppDroppedFromFolderAtPosition(appInfo: AppInfo, folderId: Int) {
         val draggedAppKey = appInfo.toComponentKey().toString()
+        val targetPos = mAdapterItems.indexOfFirst {
+            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                it.itemInfo?.toComponentKey()?.toString() == draggedAppKey
+        }
+
+        var dropCatId: String? = null
+        if (targetPos != -1) {
+            for (i in targetPos downTo 0) {
+                val item = mAdapterItems.getOrNull(i)
+                if (item != null) {
+                    if (!item.categoryId.isNullOrEmpty()) {
+                        dropCatId = item.categoryId
+                        break
+                    }
+                    if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                        val cat = categoryList.find { it.title == item.sectionTitle }
+                        if (cat != null) {
+                            dropCatId = cat.id.toString()
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        val targetCatId = dropCatId ?: "no_category"
+
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (targetCatId != "no_category") {
+                try {
+                    val catId = targetCatId.toInt()
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to move dragged app to target category", e)
+                }
+            }
+
             val folderEntry = folderList.find { it.id == folderId }
             val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
             val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
@@ -700,9 +766,11 @@ class LawnchairAlphabeticalAppsList<T>(
             }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                persistCategoryChanges()
-                updateAdapterItems()
-                adapter?.notifyDataSetChanged()
+                safeNotifyAdapter {
+                    persistCategoryChanges()
+                    updateAdapterItems()
+                    adapter?.notifyDataSetChanged()
+                }
             }
         }
     }
