@@ -496,6 +496,20 @@ class LawnchairAlphabeticalAppsList<T>(
             val newEntry = FolderEntry(id = folderId, title = "Folder", itemComponentKeys = listOf(targetAppKey, draggedAppKey))
             folderList = (folderList.filterNot { it.id == folderId } + newEntry).toMutableList()
 
+            if (!targetCategoryId.isNullOrEmpty()) {
+                categoryList = categoryList.map { cat ->
+                    if (cat.id.toString() == targetCategoryId) {
+                        val cleanKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey }.toMutableList()
+                        if (!cleanKeys.contains(targetAppKey)) {
+                            cleanKeys.add(targetAppKey)
+                        }
+                        cat.copy(itemComponentKeys = cleanKeys)
+                    } else {
+                        cat.copy(itemComponentKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey || it == targetAppKey })
+                    }
+                }.toMutableList()
+            }
+
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 safeNotifyAdapter {
                     updateAdapterItems()
@@ -533,6 +547,17 @@ class LawnchairAlphabeticalAppsList<T>(
             )
             val updatedEntry = FolderEntry(id = folderId, title = folderTitle, itemComponentKeys = updatedKeys)
             folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+
+            if (!targetCategoryId.isNullOrEmpty()) {
+                categoryList = categoryList.map { cat ->
+                    if (cat.id.toString() == targetCategoryId) {
+                        val cleanKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey }.toMutableList()
+                        cat.copy(itemComponentKeys = cleanKeys)
+                    } else {
+                        cat.copy(itemComponentKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey })
+                    }
+                }.toMutableList()
+            }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 safeNotifyAdapter {
