@@ -487,6 +487,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 updateAdapterItems()
+                adapter?.notifyDataSetChanged()
                 persistCategoryChanges()
             }
         }
@@ -522,6 +523,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 updateAdapterItems()
+                adapter?.notifyDataSetChanged()
                 persistCategoryChanges()
             }
         }

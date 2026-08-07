@@ -160,6 +160,10 @@ public class AlphabeticalAppsList<T extends Context & ActivityContext> implement
         mAdapter = adapter;
     }
 
+    public BaseAllAppsAdapter<T> getAdapter() {
+        return mAdapter;
+    }
+
     /**
      * Returns fast scroller sections of all the current filtered applications.
      */
