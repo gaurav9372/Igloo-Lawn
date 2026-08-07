@@ -706,13 +706,9 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     public void reapplyItemInfo() {
         mItemsInvalidated = true;
 
-        if (!isEmpty(mInfo.title)) {
-            mFolderName.setText(mInfo.title);
-            mFolderName.setHint(null);
-        } else {
-            mFolderName.setText("");
-            mFolderName.setHint(R.string.folder_hint_text);
-        }
+        CharSequence currentTitle = !isEmpty(mInfo.title) ? mInfo.title : "Folder";
+        mFolderName.setText(currentTitle);
+        mFolderName.setHint(null);
     }
 
     /**
