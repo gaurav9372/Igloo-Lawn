@@ -731,8 +731,16 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
 
         CharSequence currentTitle = !isEmpty(mInfo.title) ? mInfo.title : "Folder";
         mInfo.title = currentTitle;
-        mFolderName.setText(currentTitle);
-        mFolderName.setHint(null);
+        if (mFooter != null) {
+            mFooter.setAlpha(1f);
+            mFooter.setVisibility(VISIBLE);
+        }
+        if (mFolderName != null) {
+            mFolderName.setAlpha(1f);
+            mFolderName.setVisibility(VISIBLE);
+            mFolderName.setText(currentTitle);
+            mFolderName.setHint(null);
+        }
     }
 
     /**
