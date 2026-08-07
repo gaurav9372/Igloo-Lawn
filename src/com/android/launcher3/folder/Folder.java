@@ -1313,30 +1313,13 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
             if (success && d != null && d.dragInfo instanceof AppInfo) {
                 AppInfo appInfo = (AppInfo) d.dragInfo;
                 mInfo.getContents().remove(d.dragInfo);
+                final String draggedAppKey = appInfo.toComponentKey().toString();
                 final int folderId = mInfo.id;
-                final String folderTitle = mInfo.title != null ? mInfo.title.toString() : "Folder";
-                List<String> remainingKeys = new ArrayList<>();
-                for (ItemInfo item : mInfo.getContents()) {
-                    if (item instanceof AppInfo) {
-                        remainingKeys.add(((AppInfo) item).toComponentKey().toString());
+                Executors.MAIN_EXECUTOR.post(() -> {
+                    com.android.launcher3.allapps.ActivityAllAppsContainerView appsView = mLauncher.getAppsView();
+                    if (appsView != null && appsView.getApps() instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                        ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) appsView.getApps()).onAppDraggedOutOfFolder(draggedAppKey, folderId);
                     }
-                }
-                Executors.MODEL_EXECUTOR.post(() -> {
-                    try {
-                        app.lawnchair.data.folder.service.FolderService folderService =
-                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(getContext());
-                        if (remainingKeys.size() < 2) {
-                            kotlinx.coroutines.BuildersKt.runBlocking(
-                                    kotlinx.coroutines.Dispatchers.getIO(),
-                                    (scope, continuation) -> folderService.deleteFolderInfo(folderId, continuation)
-                            );
-                        } else {
-                            kotlinx.coroutines.BuildersKt.runBlocking(
-                                    kotlinx.coroutines.Dispatchers.getIO(),
-                                    (scope, continuation) -> folderService.updateFolderWithItems(folderId, folderTitle, remainingKeys, continuation)
-                            );
-                        }
-                    } catch (Exception ignored) { }
                 });
             }
             if (isOpen()) {

@@ -540,6 +540,54 @@ class LawnchairAlphabeticalAppsList<T>(
         }
     }
 
+    fun onAppDraggedOutOfFolder(draggedAppKey: String, folderId: Int) {
+        context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val folderEntry = folderList.find { it.id == folderId }
+            val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
+            val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
+
+            val folderItem = mAdapterItems.find { it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId }
+            val categoryId = folderItem?.categoryId
+
+            if (remainingKeys.size < 2) {
+                try {
+                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to delete folder info", e)
+                }
+                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
+            } else {
+                val title = folderEntry?.title ?: "Folder"
+                try {
+                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
+                        folderInfoId = folderId,
+                        title = title,
+                        componentKeys = remainingKeys
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update folder info", e)
+                }
+                val updatedEntry = FolderEntry(id = folderId, title = title, itemComponentKeys = remainingKeys)
+                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+            }
+
+            if (!categoryId.isNullOrEmpty() && categoryId != "no_category") {
+                try {
+                    val catId = categoryId.toInt()
+                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to move dragged-out app to category", e)
+                }
+            }
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                updateAdapterItems()
+                adapter?.notifyDataSetChanged()
+                persistCategoryChanges()
+            }
+        }
+    }
+
     fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
         val callback = AllAppsCategoryTouchHelperCallback(this)
         val helper = androidx.recyclerview.widget.ItemTouchHelper(callback)
