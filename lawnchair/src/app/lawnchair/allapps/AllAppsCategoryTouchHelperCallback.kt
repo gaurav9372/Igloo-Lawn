@@ -159,7 +159,6 @@ class AllAppsCategoryTouchHelperCallback(
             items.removeAt(fromPos)
             items.add(toPos, fromItem)
             recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
-            list.persistCategoryChanges()
             return true
         }
         return false
