@@ -474,21 +474,6 @@ class LawnchairAlphabeticalAppsList<T>(
 
     fun createFolderWithApps(targetAppKey: String, draggedAppKey: String, targetCategoryId: String?) {
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
-                try {
-                    val catId = targetCategoryId.toInt()
-                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
-                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(targetAppKey, catId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to move dragged app to target category", e)
-                }
-            } else if (targetCategoryId == "no_category") {
-                try {
-                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(listOf(draggedAppKey, targetAppKey))
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to remove component keys from categories", e)
-                }
-            }
             val folderId = app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).createFolderWithItems(
                 title = "Folder",
                 componentKeys = listOf(targetAppKey, draggedAppKey)
@@ -496,16 +481,26 @@ class LawnchairAlphabeticalAppsList<T>(
             val newEntry = FolderEntry(id = folderId, title = "Folder", itemComponentKeys = listOf(targetAppKey, draggedAppKey))
             folderList = (folderList.filterNot { it.id == folderId } + newEntry).toMutableList()
 
-            if (!targetCategoryId.isNullOrEmpty()) {
+            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
+                val catIdInt = targetCategoryId.toIntOrNull()
                 categoryList = categoryList.map { cat ->
                     if (cat.id.toString() == targetCategoryId) {
                         val cleanKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey }.toMutableList()
                         if (!cleanKeys.contains(targetAppKey)) {
                             cleanKeys.add(targetAppKey)
                         }
+                        if (catIdInt != null) {
+                            try {
+                                app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context)
+                                    .updateCategoryWithItems(catIdInt, cat.title, cleanKeys)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to update category items in DB", e)
+                            }
+                        }
                         cat.copy(itemComponentKeys = cleanKeys)
                     } else {
-                        cat.copy(itemComponentKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey || it == targetAppKey })
+                        val cleanKeys = cat.itemComponentKeys.filterNot { it == draggedAppKey || it == targetAppKey }
+                        cat.copy(itemComponentKeys = cleanKeys)
                     }
                 }.toMutableList()
             }
