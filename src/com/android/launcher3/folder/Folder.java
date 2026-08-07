@@ -640,6 +640,23 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     }
 
     public FolderIcon getFolderIcon() {
+        if (mFolderIcon == null || !mFolderIcon.isAttachedToWindow()) {
+            if (isInAppDrawer()) {
+                com.android.launcher3.allapps.ActivityAllAppsContainerView appsView = mActivityContext.getAppsView();
+                if (appsView != null && appsView.getActiveRecyclerView() != null) {
+                    androidx.recyclerview.widget.RecyclerView rv = appsView.getActiveRecyclerView();
+                    for (int i = 0; i < rv.getChildCount(); i++) {
+                        View child = rv.getChildAt(i);
+                        if (child instanceof FolderIcon icon) {
+                            if (icon.getFolderInfo() != null && mInfo != null && icon.getFolderInfo().id == mInfo.id) {
+                                mFolderIcon = icon;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return mFolderIcon;
     }
 

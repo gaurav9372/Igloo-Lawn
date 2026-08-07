@@ -145,8 +145,20 @@ public class FolderAnimationManager implements FolderAnimationCreator {
 
         // Match position of the FolderIcon
         final Rect folderIconPos = new Rect();
+        FolderIcon liveIcon = mFolder.getFolderIcon();
+        if (liveIcon != null && liveIcon.isAttachedToWindow()) {
+            mFolderIcon = liveIcon;
+            mPreviewBackground = mFolderIcon.mBackground;
+        }
         float scaleRelativeToDragLayer = mFolder.mActivityContext.getDragLayer()
                 .getDescendantRectRelativeToSelf(mFolderIcon, folderIconPos);
+
+        if (folderIconPos.isEmpty() || (folderIconPos.left == 0 && folderIconPos.top == 0)) {
+            int cx = lp.x + (lp.width / 2);
+            int cy = lp.y + (lp.height / 2);
+            folderIconPos.set(cx - 40, cy - 40, cx + 40, cy + 40);
+        }
+
         int scaledRadius = mPreviewBackground.getScaledRadius();
         float initialSize = (scaledRadius * 2) * scaleRelativeToDragLayer;
 
