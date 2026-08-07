@@ -638,93 +638,104 @@ class LawnchairAlphabeticalAppsList<T>(
         val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
         val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
 
-        val folderIndex = mAdapterItems.indexOfFirst {
-            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId
-        }
-
         safeNotifyAdapter {
-            if (remainingKeys.size < 2) {
-                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
-                if (folderIndex != -1) {
-                    val folderItem = mAdapterItems[folderIndex]
-                    val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
-                        (info as? AppInfo)?.toComponentKey()?.toString() != draggedAppKey
-                    } as? AppInfo
+            try {
+                val folderIndex = mAdapterItems.indexOfFirst {
+                    it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId
+                }
 
-                    if (remainingInfo != null) {
-                        val standaloneItem = AdapterItem.asApp(remainingInfo).apply {
-                            categoryId = folderItem.categoryId
+                if (remainingKeys.size < 2) {
+                    folderList = folderList.filterNot { it.id == folderId }.toMutableList()
+                    if (folderIndex != -1 && folderIndex in mAdapterItems.indices) {
+                        val folderItem = mAdapterItems[folderIndex]
+                        val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
+                            (info as? AppInfo)?.toComponentKey()?.toString() != draggedAppKey
+                        } as? AppInfo
+
+                        if (remainingInfo != null) {
+                            val standaloneItem = AdapterItem.asApp(remainingInfo).apply {
+                                categoryId = folderItem.categoryId
+                            }
+                            mAdapterItems[folderIndex] = standaloneItem
+                            adapter?.notifyItemChanged(folderIndex)
+                        } else {
+                            mAdapterItems.removeAt(folderIndex)
+                            adapter?.notifyItemRemoved(folderIndex)
                         }
-                        mAdapterItems[folderIndex] = standaloneItem
+                    }
+                } else {
+                    val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
+                    if (updatedEntry != null) {
+                        folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+                    }
+                    if (folderIndex != -1 && folderIndex in mAdapterItems.indices) {
+                        val folderItem = mAdapterItems[folderIndex]
+                        folderItem.folderInfo?.getContents()?.removeIf { info ->
+                            (info as? AppInfo)?.toComponentKey()?.toString() == draggedAppKey
+                        }
                         adapter?.notifyItemChanged(folderIndex)
-                    } else {
-                        mAdapterItems.removeAt(folderIndex)
-                        adapter?.notifyItemRemoved(folderIndex)
                     }
                 }
-            } else {
-                val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
-                if (updatedEntry != null) {
-                    folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
-                }
-                if (folderIndex != -1) {
-                    val folderItem = mAdapterItems[folderIndex]
-                    folderItem.folderInfo?.getContents()?.removeIf { info ->
-                        (info as? AppInfo)?.toComponentKey()?.toString() == draggedAppKey
-                    }
-                    adapter?.notifyItemChanged(folderIndex)
-                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed in onAppRemovedFromFolder", e)
             }
         }
     }
 
     fun onFolderDragOver(appInfo: AppInfo, targetPos: Int) {
-        val appKey = appInfo.toComponentKey().toString()
-        val existingIndex = mAdapterItems.indexOfFirst {
-            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
-                it.itemInfo?.toComponentKey()?.toString() == appKey
-        }
+        safeNotifyAdapter {
+            try {
+                val appKey = appInfo.toComponentKey().toString()
+                if (targetPos !in mAdapterItems.indices) return@safeNotifyAdapter
 
-        if (targetPos !in mAdapterItems.indices) return
-
-        var resolvedCatId: String? = null
-        for (i in targetPos downTo 0) {
-            val item = mAdapterItems.getOrNull(i)
-            if (item != null) {
-                if (!item.categoryId.isNullOrEmpty()) {
-                    resolvedCatId = item.categoryId
-                    break
+                val existingIndex = mAdapterItems.indexOfFirst {
+                    it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                        it.itemInfo?.toComponentKey()?.toString() == appKey
                 }
-                if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                    val cat = categoryList.find { it.title == item.sectionTitle }
-                    if (cat != null) {
-                        resolvedCatId = cat.id.toString()
-                        break
+
+                var resolvedCatId: String? = null
+                for (i in targetPos downTo 0) {
+                    val item = mAdapterItems.getOrNull(i)
+                    if (item != null) {
+                        if (!item.categoryId.isNullOrEmpty()) {
+                            resolvedCatId = item.categoryId
+                            break
+                        }
+                        if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                            val cat = categoryList.find { it.title == item.sectionTitle }
+                            if (cat != null) {
+                                resolvedCatId = cat.id.toString()
+                                break
+                            }
+                        }
                     }
                 }
-            }
-        }
-        val targetCatId = resolvedCatId ?: "no_category"
+                val targetCatId = resolvedCatId ?: "no_category"
 
-        val targetItem = mAdapterItems[targetPos]
-        val effectivePos = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-            (targetPos + 1).coerceAtMost(mAdapterItems.size)
-        } else {
-            targetPos
-        }
-
-        safeNotifyAdapter {
-            if (existingIndex == -1) {
-                val newItem = AdapterItem.asApp(appInfo).apply {
-                    categoryId = targetCatId
+                val targetItem = mAdapterItems[targetPos]
+                val effectivePos = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                    (targetPos + 1).coerceAtMost(mAdapterItems.size)
+                } else {
+                    targetPos
                 }
-                mAdapterItems.add(effectivePos, newItem)
-                adapter?.notifyItemInserted(effectivePos)
-            } else if (existingIndex != effectivePos) {
-                val item = mAdapterItems.removeAt(existingIndex)
-                item.categoryId = targetCatId
-                mAdapterItems.add(effectivePos, item)
-                adapter?.notifyItemMoved(existingIndex, effectivePos)
+
+                if (existingIndex == -1) {
+                    val newItem = AdapterItem.asApp(appInfo).apply {
+                        categoryId = targetCatId
+                    }
+                    if (effectivePos <= mAdapterItems.size) {
+                        mAdapterItems.add(effectivePos, newItem)
+                        adapter?.notifyItemInserted(effectivePos)
+                    }
+                } else if (existingIndex != effectivePos && existingIndex in mAdapterItems.indices) {
+                    val item = mAdapterItems.removeAt(existingIndex)
+                    item.categoryId = targetCatId
+                    val safePos = effectivePos.coerceAtMost(mAdapterItems.size)
+                    mAdapterItems.add(safePos, item)
+                    adapter?.notifyItemMoved(existingIndex, safePos)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed in onFolderDragOver", e)
             }
         }
     }

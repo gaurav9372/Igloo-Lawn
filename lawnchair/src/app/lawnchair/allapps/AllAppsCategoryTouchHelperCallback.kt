@@ -191,10 +191,18 @@ class AllAppsCategoryTouchHelperCallback(
                 fromItem.categoryId = targetCatId
             }
 
-            items.removeAt(fromPos)
-            items.add(toPos, fromItem)
-            recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
-            return true
+            try {
+                if (fromPos in items.indices && toPos in items.indices) {
+                    items.removeAt(fromPos)
+                    val safeToPos = toPos.coerceAtMost(items.size)
+                    items.add(safeToPos, fromItem)
+                    recyclerView.adapter?.notifyItemMoved(fromPos, safeToPos)
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "onMove list update failed safely", e)
+            }
+            return false
         }
 
         return false
