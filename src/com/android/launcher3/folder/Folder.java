@@ -565,19 +565,18 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     public boolean onBackKey() {
         // Convert to a string here to ensure that no other state associated with the text field
         // gets saved.
-        String newTitle = mFolderName.getText().toString();
+        String rawTitle = mFolderName.getText() != null ? mFolderName.getText().toString().trim() : "";
+        String newTitle = TextUtils.isEmpty(rawTitle) ? "Folder" : rawTitle;
         if (DEBUG) {
             Log.d(TAG, "onBackKey newTitle=" + newTitle);
         }
         mInfo.setTitle(newTitle, mActivityContext.getModelWriter());
-        mFolderIcon.onTitleChanged(newTitle);
-
-        if (TextUtils.isEmpty(mInfo.title)) {
-            mFolderName.setHint(R.string.folder_hint_text);
-            mFolderName.setText("");
-        } else {
-            mFolderName.setHint(null);
+        if (mFolderIcon != null) {
+            mFolderIcon.onTitleChanged(newTitle);
         }
+
+        mFolderName.setText(newTitle);
+        mFolderName.setHint(null);
 
         sendCustomAccessibilityEvent(
                 this, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
@@ -731,6 +730,7 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
         mItemsInvalidated = true;
 
         CharSequence currentTitle = !isEmpty(mInfo.title) ? mInfo.title : "Folder";
+        mInfo.title = currentTitle;
         mFolderName.setText(currentTitle);
         mFolderName.setHint(null);
     }

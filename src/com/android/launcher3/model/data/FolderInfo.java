@@ -93,6 +93,7 @@ public class FolderInfo extends CollectionInfo {
 
     public FolderInfo() {
         itemType = LauncherSettings.Favorites.ITEM_TYPE_FOLDER;
+        title = "Folder";
     }
 
     @Override
