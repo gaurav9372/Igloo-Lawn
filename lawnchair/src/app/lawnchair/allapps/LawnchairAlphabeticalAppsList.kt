@@ -595,7 +595,7 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun safeNotifyAdapter(action: () -> Unit) {
-        val rv = itemTouchHelper?.attachedRecyclerView
+        val rv = context.launcher.appsView?.activeRecyclerView
         if (rv != null && rv.isComputingLayout) {
             rv.post {
                 try { action() } catch (e: Exception) { Log.w(TAG, "Safe notify failed", e) }
