@@ -146,6 +146,9 @@ class LawnchairAlphabeticalAppsList<T>(
                         }
                         .toMutableList()
                     updateAdapterItems()
+                    safeNotifyAdapter {
+                        adapter?.notifyItemRangeChanged(0, adapter?.itemCount ?: 0)
+                    }
                 }
             }
             .launchIn(context.launcher.lifecycleScope)
@@ -157,6 +160,9 @@ class LawnchairAlphabeticalAppsList<T>(
                 if (categories != null) {
                     categoryList = categories.toMutableList()
                     updateAdapterItems()
+                    safeNotifyAdapter {
+                        adapter?.notifyItemRangeChanged(0, adapter?.itemCount ?: 0)
+                    }
                 }
             }
             .launchIn(context.launcher.lifecycleScope)
