@@ -153,6 +153,21 @@ class AllAppsCategoryTouchHelperCallback(
             toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER
 
         if (isToMovable) {
+            val draggedView = viewHolder.itemView
+            val targetView = target.itemView
+            val dragCx = draggedView.left + draggedView.translationX + draggedView.width / 2f
+            val dragCy = draggedView.top + draggedView.translationY + draggedView.height / 2f
+            val targetCx = targetView.left + targetView.translationX + targetView.width / 2f
+            val targetCy = targetView.top + targetView.translationY + targetView.height / 2f
+            val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
+            val hoverRadius = targetView.width * 0.45f
+
+            if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) &&
+                dist < hoverRadius) {
+                return false
+            }
+
             val targetCatId = if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
                 if (fromPos > toPos) {
                     // Dragging UPWARDS across header: enter category above this header
@@ -239,7 +254,7 @@ class AllAppsCategoryTouchHelperCallback(
             val targetCx = child.left + child.translationX + child.width / 2f
             val targetCy = child.top + child.translationY + child.height / 2f
             val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
-            val hoverRadius = child.width * 0.35f
+            val hoverRadius = child.width * 0.45f
 
             if (dist < hoverRadius) {
                 newHoverTarget = childHolder
