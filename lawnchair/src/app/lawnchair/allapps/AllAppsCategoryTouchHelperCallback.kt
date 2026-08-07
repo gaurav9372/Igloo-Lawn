@@ -139,24 +139,28 @@ class AllAppsCategoryTouchHelperCallback(
         val fromItem = items[fromPos]
         val toItem = items[toPos]
 
-        // When moving over an icon or folder, do NOT reorder automatically.
-        // Return false so the target icon stays stationary for folder creation on drop.
-        if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
+        // When actively hovering over another icon/folder center to create/add to folder, pause item shifting
+        if (activeHoverHolder != null) {
             return false
         }
 
-        if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON && !fromItem.categoryId.isNullOrEmpty()) {
+        val isFromMovable = fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER
+        val isToMovable = toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER
+
+        if (isFromMovable && isToMovable) {
             if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
                 val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
                 val targetCatId = targetCat?.id?.toString() ?: "no_category"
-                if (fromItem.categoryId != targetCatId) {
-                    fromItem.categoryId = targetCatId
-                }
-                items.removeAt(fromPos)
-                items.add(toPos, fromItem)
-                recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
-                return true
+                fromItem.categoryId = targetCatId
+            } else if (!toItem.categoryId.isNullOrEmpty()) {
+                fromItem.categoryId = toItem.categoryId
             }
+
+            items.removeAt(fromPos)
+            items.add(toPos, fromItem)
+            recyclerView.adapter?.notifyItemMoved(fromPos, toPos)
+            list.persistCategoryChanges()
+            return true
         }
         return false
     }
@@ -214,7 +218,7 @@ class AllAppsCategoryTouchHelperCallback(
             val targetCx = child.left + child.translationX + child.width / 2f
             val targetCy = child.top + child.translationY + child.height / 2f
             val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
-            val hoverRadius = child.width * 0.60f
+            val hoverRadius = child.width * 0.35f
 
             if (dist < hoverRadius) {
                 newHoverTarget = childHolder
