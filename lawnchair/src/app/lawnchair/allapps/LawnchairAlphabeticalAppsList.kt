@@ -590,6 +590,74 @@ class LawnchairAlphabeticalAppsList<T>(
         }
     }
 
+    fun onFolderDragOver(appInfo: AppInfo, targetPos: Int) {
+        val appKey = appInfo.toComponentKey().toString()
+        val existingIndex = mAdapterItems.indexOfFirst {
+            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                it.itemInfo?.toComponentKey()?.toString() == appKey
+        }
+
+        if (targetPos !in mAdapterItems.indices) return
+
+        val targetItem = mAdapterItems[targetPos]
+        val targetCatId = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+            val targetCat = categoryList.find { it.title == targetItem.sectionTitle }
+            targetCat?.id?.toString() ?: "no_category"
+        } else {
+            targetItem.categoryId
+        } ?: "no_category"
+
+        if (existingIndex == -1) {
+            val newItem = AdapterItem.asApp(appInfo).apply {
+                categoryId = targetCatId
+            }
+            mAdapterItems.add(targetPos, newItem)
+            adapter?.notifyItemInserted(targetPos)
+        } else if (existingIndex != targetPos) {
+            val item = mAdapterItems.removeAt(existingIndex)
+            item.categoryId = targetCatId
+            mAdapterItems.add(targetPos, item)
+            adapter?.notifyItemMoved(existingIndex, targetPos)
+        }
+    }
+
+    fun onAppDroppedFromFolderAtPosition(appInfo: AppInfo, folderId: Int) {
+        val draggedAppKey = appInfo.toComponentKey().toString()
+        context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val folderEntry = folderList.find { it.id == folderId }
+            val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
+            val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
+
+            if (remainingKeys.size < 2) {
+                try {
+                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to delete folder info", e)
+                }
+                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
+            } else {
+                val title = folderEntry?.title ?: "Folder"
+                try {
+                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
+                        folderInfoId = folderId,
+                        title = title,
+                        componentKeys = remainingKeys
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update folder info", e)
+                }
+                val updatedEntry = FolderEntry(id = folderId, title = title, itemComponentKeys = remainingKeys)
+                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+            }
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                persistCategoryChanges()
+                updateAdapterItems()
+                adapter?.notifyDataSetChanged()
+            }
+        }
+    }
+
     fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
         val callback = AllAppsCategoryTouchHelperCallback(this)
         val helper = androidx.recyclerview.widget.ItemTouchHelper(callback)

@@ -1921,13 +1921,43 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         if (dragObject != null && dragObject.dragView != null) {
             dragObject.dragView.remove();
         }
+        if (dragObject != null && dragObject.dragInfo instanceof com.android.launcher3.model.data.AppInfo) {
+            AllAppsRecyclerView recyclerView = getActiveRecyclerView();
+            if (recyclerView != null && recyclerView.getApps() instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                app.lawnchair.allapps.LawnchairAlphabeticalAppsList appsList =
+                        (app.lawnchair.allapps.LawnchairAlphabeticalAppsList) recyclerView.getApps();
+                if (dragObject.dragSource instanceof com.android.launcher3.folder.Folder) {
+                    com.android.launcher3.folder.Folder folder = (com.android.launcher3.folder.Folder) dragObject.dragSource;
+                    appsList.onAppDroppedFromFolderAtPosition((com.android.launcher3.model.data.AppInfo) dragObject.dragInfo, folder.getInfo().id);
+                } else {
+                    appsList.persistCategoryChanges();
+                    if (appsList.getAdapter() != null) {
+                        appsList.getAdapter().notifyDataSetChanged();
+                    }
+                }
+            }
+        }
     }
 
     @Override
     public void onDragEnter(com.android.launcher3.DropTarget.DragObject dragObject) { }
 
     @Override
-    public void onDragOver(com.android.launcher3.DropTarget.DragObject dragObject) { }
+    public void onDragOver(com.android.launcher3.DropTarget.DragObject dragObject) {
+        if (dragObject != null && dragObject.dragInfo instanceof com.android.launcher3.model.data.AppInfo) {
+            AllAppsRecyclerView recyclerView = getActiveRecyclerView();
+            if (recyclerView != null && recyclerView.getApps() instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                View child = recyclerView.findChildViewUnder(dragObject.x - recyclerView.getLeft(), dragObject.y - recyclerView.getTop());
+                if (child != null) {
+                    int pos = recyclerView.getChildAdapterPosition(child);
+                    if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+                        ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) recyclerView.getApps())
+                                .onFolderDragOver((com.android.launcher3.model.data.AppInfo) dragObject.dragInfo, pos);
+                    }
+                }
+            }
+        }
+    }
 
     @Override
     public void onDragExit(com.android.launcher3.DropTarget.DragObject dragObject) { }
