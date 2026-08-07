@@ -1947,7 +1947,15 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
         if (dragObject != null && dragObject.dragInfo instanceof com.android.launcher3.model.data.AppInfo) {
             AllAppsRecyclerView recyclerView = getActiveRecyclerView();
             if (recyclerView != null && recyclerView.getApps() instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
-                View child = recyclerView.findChildViewUnder(dragObject.x - recyclerView.getLeft(), dragObject.y - recyclerView.getTop());
+                int[] recyclerLoc = new int[2];
+                recyclerView.getLocationOnScreen(recyclerLoc);
+                int[] dragLayerLoc = new int[2];
+                mActivityContext.getDragLayer().getLocationOnScreen(dragLayerLoc);
+
+                float touchXInRecycler = dragObject.x - (recyclerLoc[0] - dragLayerLoc[0]);
+                float touchYInRecycler = dragObject.y - (recyclerLoc[1] - dragLayerLoc[1]);
+
+                View child = recyclerView.findChildViewUnder(touchXInRecycler, touchYInRecycler);
                 if (child != null) {
                     int pos = recyclerView.getChildAdapterPosition(child);
                     if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
