@@ -203,25 +203,32 @@ public class FolderInfo extends CollectionInfo {
         } else {
             options &= ~FLAG_MANUAL_FOLDER_NAME;
         }
-        if (modelWriter != null) {
-            modelWriter.updateItemInDatabase(this);
+        boolean isAppDrawerFolder = container == CONTAINER_ALL_APPS || container < 0 || container == ItemInfo.NO_ID;
+
+        if (!isAppDrawerFolder && modelWriter != null) {
+            try {
+                modelWriter.updateItemInDatabase(this);
+            } catch (Exception e) {
+                android.util.Log.w("FolderInfo", "Failed to update item in workspace DB", e);
+            }
         }
-        if (this.id > 0 && this.title != null && modelWriter != null) {
+
+        if (this.id > 0 && this.title != null) {
             final int folderId = this.id;
             final String folderTitle = this.title.toString();
-            final android.content.Context context = modelWriter.getContext();
-            com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
-                try {
-                    if (context != null) {
+            final android.content.Context context = modelWriter != null ? modelWriter.getContext() : com.android.launcher3.LauncherAppState.getInstanceNoCreate() != null ? com.android.launcher3.LauncherAppState.getInstanceNoCreate().getContext() : null;
+            if (context != null) {
+                com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
+                    try {
                         app.lawnchair.data.folder.service.FolderService folderService =
                                 app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context);
                         kotlinx.coroutines.BuildersKt.runBlocking(
                                 kotlinx.coroutines.Dispatchers.getIO(),
                                 (scope, continuation) -> folderService.renameFolderInfo(folderId, folderTitle, continuation)
                         );
-                    }
-                } catch (Exception ignored) { }
-            });
+                    } catch (Exception ignored) { }
+                });
+            }
         }
     }
 
