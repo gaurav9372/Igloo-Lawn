@@ -227,7 +227,7 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     private FromState mFromLabelState;
 
     @Thunk
-    FolderIcon mFolderIcon;
+    public FolderIcon mFolderIcon;
 
     @Thunk
     FolderPagedView mContent;

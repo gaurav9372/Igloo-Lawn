@@ -58,19 +58,19 @@ data class FolderAnimationData(
         fun Folder.getAnimationData(isOpening: Boolean): FolderAnimationData {
             /** Calculates all values required for Folder Animators. */
             // Position and Scale values
-            val layoutParams = layoutParams as BaseDragLayer.LayoutParams
-            val previewBackground = folderIcon.mBackground
+            val iconView = getFolderIcon()
+            val previewBackground = iconView.mBackground
 
             // Get items in Preview and their scaling
             val itemsInPreview: List<View> = getPreviewIconsOnPage(this, 0)
-            val previewScale: Float = folderIcon.layoutRule.scaleForItem(itemsInPreview.size, 0)
-            val previewSize: Float = folderIcon.layoutRule.iconSize * previewScale
+            val previewScale: Float = iconView.layoutRule.scaleForItem(itemsInPreview.size, 0)
+            val previewSize: Float = iconView.layoutRule.iconSize * previewScale
 
             // Get scale and position of FolderIcon relative to DragLayer
             val folderIconWorkspacePosition = Rect()
             val scaleRelativeToDragLayer: Float =
                 mActivityContext.dragLayer.getDescendantRectRelativeToSelf(
-                    folderIcon,
+                    iconView as View,
                     folderIconWorkspacePosition,
                 )
             val scaledFolderRadius: Int = previewBackground.scaledRadius
