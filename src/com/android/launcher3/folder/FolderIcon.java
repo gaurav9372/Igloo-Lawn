@@ -458,6 +458,15 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         mInfo.setTitle(newTitle, mActivity.getModelWriter());
         onTitleChanged(mInfo.title);
         mFolder.getFolderName().setText(mInfo.title);
+    }
+
+    public void onTitleChanged(CharSequence title) {
+        CharSequence displayTitle = android.text.TextUtils.isEmpty(title) ? "Folder" : title;
+        if (mFolderName != null) {
+            mFolderName.setText(displayTitle);
+        }
+        setContentDescription(getAccessiblityTitle(displayTitle));
+    }
 
         // Logging for folder creation flow
         StatsLogManager.newInstance(getContext()).logger()
