@@ -512,8 +512,22 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
             return;
         }
         if (isInAppDrawer()) {
+            if (dragObject != null && dragObject.dragInfo instanceof AppInfo) {
+                AppInfo appInfo = (AppInfo) dragObject.dragInfo;
+                mInfo.getContents().remove(appInfo);
+                final String draggedAppKey = appInfo.toComponentKey().toString();
+                final int folderId = mInfo.id;
+                Executors.MAIN_EXECUTOR.post(() -> {
+                    com.android.launcher3.allapps.ActivityAllAppsContainerView appsView = mActivityContext.getAppsView();
+                    if (appsView != null && appsView.getActiveRecyclerView() != null) {
+                        com.android.launcher3.allapps.AlphabeticalAppsList appsList = appsView.getActiveRecyclerView().getApps();
+                        if (appsList instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                            ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) appsList).onAppRemovedFromFolder(draggedAppKey, folderId);
+                        }
+                    }
+                });
+            }
             close(true);
-            // LC-Note: Do not remove item
             return;
         }
         

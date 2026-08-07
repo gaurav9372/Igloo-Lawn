@@ -590,6 +590,49 @@ class LawnchairAlphabeticalAppsList<T>(
         }
     }
 
+    fun onAppRemovedFromFolder(draggedAppKey: String, folderId: Int) {
+        val folderEntry = folderList.find { it.id == folderId }
+        val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
+        val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
+
+        val folderIndex = mAdapterItems.indexOfFirst {
+            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId
+        }
+
+        if (remainingKeys.size < 2) {
+            folderList = folderList.filterNot { it.id == folderId }.toMutableList()
+            if (folderIndex != -1) {
+                val folderItem = mAdapterItems[folderIndex]
+                val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
+                    (info as? AppInfo)?.toComponentKey()?.toString() != draggedAppKey
+                } as? AppInfo
+
+                if (remainingInfo != null) {
+                    val standaloneItem = AdapterItem.asApp(remainingInfo).apply {
+                        categoryId = folderItem.categoryId
+                    }
+                    mAdapterItems[folderIndex] = standaloneItem
+                    adapter?.notifyItemChanged(folderIndex)
+                } else {
+                    mAdapterItems.removeAt(folderIndex)
+                    adapter?.notifyItemRemoved(folderIndex)
+                }
+            }
+        } else {
+            val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
+            if (updatedEntry != null) {
+                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+            }
+            if (folderIndex != -1) {
+                val folderItem = mAdapterItems[folderIndex]
+                folderItem.folderInfo?.getContents()?.removeIf { info ->
+                    (info as? AppInfo)?.toComponentKey()?.toString() == draggedAppKey
+                }
+                adapter?.notifyItemChanged(folderIndex)
+            }
+        }
+    }
+
     fun onFolderDragOver(appInfo: AppInfo, targetPos: Int) {
         val appKey = appInfo.toComponentKey().toString()
         val existingIndex = mAdapterItems.indexOfFirst {
