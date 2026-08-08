@@ -834,6 +834,20 @@ class LawnchairAlphabeticalAppsList<T>(
         itemTouchHelper = helper
     }
 
+    private var appsUpdateRunnable: Runnable? = null
+
+    override fun onAppsUpdated() {
+        val decorView = (mActivityContext as? android.app.Activity)?.window?.decorView
+        if (decorView != null) {
+            appsUpdateRunnable?.let { decorView.removeCallbacks(it) }
+            val runnable = Runnable { super.onAppsUpdated() }
+            appsUpdateRunnable = runnable
+            decorView.postDelayed(runnable, 150)
+        } else {
+            super.onAppsUpdated()
+        }
+    }
+
     override fun onIdpChanged(modelPropertiesChanged: Boolean) {
         onAppsUpdated()
     }

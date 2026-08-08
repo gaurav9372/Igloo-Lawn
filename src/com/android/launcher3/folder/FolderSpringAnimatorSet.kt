@@ -49,11 +49,11 @@ class FolderSpringAnimatorSet(val animatorSet: AnimatorSet) {
         private const val LAUNCHER_SCALE = 0.975f
         private const val FOLDER_NAME_ALPHA_DURATION = 32
         private const val LARGE_FOLDER_FOOTER_DURATION = 128
-        private const val STIFFNESS_SHAPE_POSITION = 380f
-        private const val DAMPING_SHAPE_POSITION = 0.8f
-        private const val STIFFNESS_ALPHA = 1600f
-        private const val DAMPING_ALPHA = 0.9f
-        private const val STIFFNESS_LAUNCHER_SCRIM = 380f
+        private const val STIFFNESS_SHAPE_POSITION = 550f
+        private const val DAMPING_SHAPE_POSITION = 0.95f
+        private const val STIFFNESS_ALPHA = 2000f
+        private const val DAMPING_ALPHA = 0.98f
+        private const val STIFFNESS_LAUNCHER_SCRIM = 550f
         private const val DAMPING_LAUNCHER_SCRIM = 0.98f
 
         /**
