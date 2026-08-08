@@ -837,7 +837,7 @@ class LawnchairAlphabeticalAppsList<T>(
     private var appsUpdateRunnable: Runnable? = null
 
     override fun onAppsUpdated() {
-        val decorView = (mActivityContext as? android.app.Activity)?.window?.decorView
+        val decorView = (context as? android.app.Activity)?.window?.decorView
         if (decorView != null) {
             appsUpdateRunnable?.let { decorView.removeCallbacks(it) }
             val runnable = Runnable { super.onAppsUpdated() }
