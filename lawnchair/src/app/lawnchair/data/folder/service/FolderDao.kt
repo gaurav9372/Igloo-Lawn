@@ -1,4 +1,4 @@
-﻿package app.lawnchair.data.folder.service
+package app.lawnchair.data.folder.service
 
 import androidx.room.Dao
 import androidx.room.Embedded
@@ -25,6 +25,9 @@ interface FolderDao {
     @Transaction
     fun getAllFoldersWithItems(): Flow<List<FolderWithItems>>
 
+    @Query("SELECT * FROM Folders WHERE id = :id LIMIT 1")
+    suspend fun getFolderById(id: Int): FolderInfoEntity?
+
     @Query("DELETE FROM FolderItems WHERE folderId = :folderId")
     suspend fun deleteFolderItemsByFolderId(folderId: Int)
 
@@ -33,6 +36,7 @@ interface FolderDao {
 
     @Transaction
     suspend fun replaceFolderItems(folderId: Int, title: String, items: List<FolderItemEntity>) {
+        if (getFolderById(folderId) == null) return
         updateFolderTitle(folderId, title)
         deleteFolderItemsByFolderId(folderId)
         insertFolderItems(items.map { it.copy(folderId = folderId) })

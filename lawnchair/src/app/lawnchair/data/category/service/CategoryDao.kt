@@ -28,6 +28,9 @@ interface CategoryDao {
     @Query("DELETE FROM CategoryItems WHERE categoryId = :categoryId")
     suspend fun deleteCategoryItemsByCategoryId(categoryId: Int)
 
+    @Query("SELECT * FROM Categories WHERE id = :id LIMIT 1")
+    suspend fun getCategoryById(id: Int): CategoryInfoEntity?
+
     @Query("DELETE FROM CategoryItems WHERE item_info IN (:componentKeys)")
     suspend fun removeComponentKeysFromAllCategories(componentKeys: List<String>)
 
@@ -36,6 +39,7 @@ interface CategoryDao {
 
     @Transaction
     suspend fun replaceCategoryItems(categoryId: Int, title: String, items: List<CategoryItemEntity>) {
+        if (getCategoryById(categoryId) == null) return
         updateCategoryTitle(categoryId, title)
         deleteCategoryItemsByCategoryId(categoryId)
         val validKeys = items.mapNotNull { it.componentKey }
@@ -83,7 +87,7 @@ interface CategoryDao {
     @Transaction
     suspend fun moveAppsToCategory(componentKeys: List<String>, targetCategoryId: Int) {
         removeComponentKeysFromAllCategories(componentKeys)
-        if (targetCategoryId > 0) {
+        if (targetCategoryId > 0 && getCategoryById(targetCategoryId) != null) {
             val startRank = (getMaxRank(targetCategoryId) ?: 0) + 1
             val items = componentKeys.mapIndexed { index, key ->
                 CategoryItemEntity(
