@@ -42,6 +42,7 @@ import org.json.JSONObject
 
 import app.lawnchair.data.folder.FolderInfoEntity
 import app.lawnchair.data.folder.FolderItemEntity
+import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.preferences2.firstCached
 
@@ -278,7 +279,7 @@ class LawnchairBackup(
             val db = AppDatabase.INSTANCE.get(context)
             db.checkpoint()
             val foldersWithItems = db.folderDao().getAllFoldersWithItems().first()
-            val folderOrderStr = PreferenceManager2.getInstance(context).folderOrder.firstCached()
+            val folderOrderStr = PreferenceManager.getInstance(context).drawerListOrder.get()
             val rootObj = JSONObject()
             rootObj.put("folderOrder", folderOrderStr)
             val arr = JSONArray()
@@ -318,7 +319,7 @@ class LawnchairBackup(
                 val rootObj = JSONObject(trimmed)
                 val folderOrderStr = rootObj.optString("folderOrder", "")
                 if (folderOrderStr.isNotBlank()) {
-                    PreferenceManager2.getInstance(context).folderOrder.set(folderOrderStr)
+                    PreferenceManager.getInstance(context).drawerListOrder.set(folderOrderStr)
                 }
                 arr = rootObj.optJSONArray("folders") ?: JSONArray()
             } else {
