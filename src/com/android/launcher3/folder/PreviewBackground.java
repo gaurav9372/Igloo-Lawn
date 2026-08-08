@@ -291,8 +291,13 @@ public class PreviewBackground extends DelegatedCellDrawing {
         drawShadow(canvas);
     }
 
+    private ShapeDelegate mShapeDelegate;
+
     private ShapeDelegate getShape() {
-        return ThemeManager.INSTANCE.get(mContext).getFolderShape();
+        if (mShapeDelegate == null) {
+            mShapeDelegate = ThemeManager.INSTANCE.get(mContext).getFolderShape();
+        }
+        return mShapeDelegate;
     }
 
     public void drawShadow(Canvas canvas) {
