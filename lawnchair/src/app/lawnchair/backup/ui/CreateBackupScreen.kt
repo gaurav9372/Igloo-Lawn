@@ -116,13 +116,6 @@ fun CreateBackupScreen(
         backArrowVisible = !LocalIsExpandedScreen.current,
         scrollState = if (isPortrait) null else scrollState,
     ) {
-        DisposableEffect(contents, hasLiveWallpaper) {
-            if (contents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && hasLiveWallpaper) {
-                viewModel.setBackupContents(contents.removeFlag(LawnchairBackup.INCLUDE_WALLPAPER))
-            }
-            onDispose { }
-        }
-
         if (isPortrait) {
             WithWallpaper(
                 displayWallpaperButton = false,
@@ -169,7 +162,6 @@ fun CreateBackupScreen(
                 },
                 mask = LawnchairBackup.INCLUDE_WALLPAPER,
                 label = stringResource(id = R.string.backup_content_wallpaper),
-                enabled = !hasLiveWallpaper,
             )
             FlagSwitchPreference(
                 flags = contents,
