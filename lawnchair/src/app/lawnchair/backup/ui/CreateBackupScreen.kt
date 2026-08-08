@@ -154,12 +154,7 @@ fun CreateBackupScreen(
             )
             FlagSwitchPreference(
                 flags = contents,
-                setFlags = { newFlags ->
-                    viewModel.setBackupContents(newFlags)
-                    if (newFlags.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && !hasWallpaperPermission) {
-                        showPermissionDialog = true
-                    }
-                },
+                setFlags = viewModel::setBackupContents,
                 mask = LawnchairBackup.INCLUDE_WALLPAPER,
                 label = stringResource(id = R.string.backup_content_wallpaper),
             )
