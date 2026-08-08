@@ -83,7 +83,8 @@ class CategoryViewModel(
 
     fun reorderCategories(orderedIds: List<Int>) {
         viewModelScope.launch {
-            repository.reorderCategories(orderedIds)
+            val dbCategoryIds = orderedIds.filter { it != -100 }
+            repository.reorderCategories(dbCategoryIds)
         }
     }
 

@@ -85,6 +85,8 @@ fun AppDrawerCategoriesPreference(
     )
 }
 
+const val NO_CATEGORY_ID = -100
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppDrawerCategoriesPreference(
@@ -97,7 +99,11 @@ fun AppDrawerCategoriesPreference(
     modifier: Modifier = Modifier,
 ) {
     val bottomSheetHandler = bottomSheetHandler
-    val displayList = categories ?: emptyList()
+    val noCategoryEntry = remember { CategoryEntry(id = NO_CATEGORY_ID, title = "No Category") }
+    val displayList = remember(categories) {
+        if (categories == null) emptyList()
+        else categories + noCategoryEntry
+    }
     var categoryToDeletePending by remember { mutableStateOf<CategoryEntry?>(null) }
 
     LoadingScreen(
@@ -330,53 +336,55 @@ fun CategoryItem(
             dragIndicator()
         },
         endWidget = {
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    shapes = IconButtonDefaults.shapes(),
-                ) {
-                    Icon(
-                        Icons.Rounded.MoreVert,
-                        contentDescription = "Options",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(id = R.string.action_edit)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Rounded.Edit,
-                                contentDescription = null,
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onItemEdit(categoryEntry)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = stringResource(id = R.string.action_delete),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Rounded.Delete,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onItemDelete(categoryEntry)
-                        },
-                    )
+            if (categoryEntry.id != NO_CATEGORY_ID) {
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        shapes = IconButtonDefaults.shapes(),
+                    ) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = "Options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(id = R.string.action_edit)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Edit,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onItemEdit(categoryEntry)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(id = R.string.action_delete),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onItemDelete(categoryEntry)
+                            },
+                        )
+                    }
                 }
             }
         },
