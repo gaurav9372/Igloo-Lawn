@@ -116,9 +116,8 @@ fun CreateBackupScreen(
         backArrowVisible = !LocalIsExpandedScreen.current,
         scrollState = if (isPortrait) null else scrollState,
     ) {
-        DisposableEffect(contents, hasLiveWallpaper, hasWallpaperPermission) {
-            val canBackupWallpaper = hasLiveWallpaper || !hasWallpaperPermission
-            if (contents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && canBackupWallpaper) {
+        DisposableEffect(contents, hasLiveWallpaper) {
+            if (contents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && hasLiveWallpaper) {
                 viewModel.setBackupContents(contents.removeFlag(LawnchairBackup.INCLUDE_WALLPAPER))
             }
             onDispose { }
@@ -162,11 +161,10 @@ fun CreateBackupScreen(
             )
             FlagSwitchPreference(
                 flags = contents,
-                setFlags = {
-                    if (it.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && !hasWallpaperPermission) {
+                setFlags = { newFlags ->
+                    viewModel.setBackupContents(newFlags)
+                    if (newFlags.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && !hasWallpaperPermission) {
                         showPermissionDialog = true
-                    } else {
-                        viewModel.setBackupContents(it)
                     }
                 },
                 mask = LawnchairBackup.INCLUDE_WALLPAPER,
