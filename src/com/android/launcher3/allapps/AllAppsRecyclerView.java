@@ -161,6 +161,7 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
 
     private float mPullStartY = -1f;
     private boolean mPullGestureActive = false;
+    private boolean mPullTriggered = false;
 
     @Override
     public boolean onInterceptTouchEvent(android.view.MotionEvent ev) {
@@ -174,11 +175,29 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
         return super.onTouchEvent(ev);
     }
 
+    private void triggerPullToSearchFocus(ActivityAllAppsContainerView<?> appsView) {
+        if (appsView == null) return;
+        appsView.getSearchUiManager().setDirectFocus(true);
+        ExtendedEditText editText = appsView.getSearchUiManager().getEditText();
+        if (editText != null) {
+            editText.setFocusable(true);
+            editText.setFocusableInTouchMode(true);
+            editText.setCursorVisible(true);
+            editText.requestFocusFromTouch();
+            editText.requestFocus();
+            if (editText.getText() != null) {
+                android.text.Selection.setSelection(editText.getText(), editText.getText().length());
+            }
+            editText.showKeyboard();
+        }
+    }
+
     private void handlePullToSearchTouch(android.view.MotionEvent ev) {
         app.lawnchair.preferences2.PreferenceManager2 prefs2 = app.lawnchair.preferences2.PreferenceManager2.getInstance(getContext());
         if (!app.lawnchair.preferences2.PreferenceCacheExtensionsKt.firstCached(prefs2.getPullToSearchInDrawer(), prefs2)) {
             mPullStartY = -1f;
             mPullGestureActive = false;
+            mPullTriggered = false;
             return;
         }
 
@@ -189,6 +208,7 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
         if (appsView == null || appsView.isSearching()) {
             mPullStartY = -1f;
             mPullGestureActive = false;
+            mPullTriggered = false;
             return;
         }
 
@@ -196,6 +216,7 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
         if (computeVerticalScrollOffset() > 0) {
             mPullStartY = -1f;
             mPullGestureActive = false;
+            mPullTriggered = false;
             return;
         }
 
@@ -209,9 +230,11 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
                 if (height > 0 && y >= height * thresholdFraction) {
                     mPullStartY = y;
                     mPullGestureActive = true;
+                    mPullTriggered = false;
                 } else {
                     mPullStartY = -1f;
                     mPullGestureActive = false;
+                    mPullTriggered = false;
                 }
                 break;
             }
@@ -222,26 +245,19 @@ public class AllAppsRecyclerView extends FastScrollRecyclerView {
                     float threshold = 40f * getResources().getDisplayMetrics().density;
                     if (dy > threshold) {
                         mPullGestureActive = false;
-                        mPullStartY = -1f;
-                        post(() -> {
-                            appsView.getSearchUiManager().setDirectFocus(true);
-                            ExtendedEditText editText = appsView.getSearchUiManager().getEditText();
-                            if (editText != null) {
-                                editText.setFocusable(true);
-                                editText.setFocusableInTouchMode(true);
-                                editText.requestFocus();
-                                if (editText.getText() != null) {
-                                    android.text.Selection.setSelection(editText.getText(), editText.getText().length());
-                                }
-                                editText.showKeyboard();
-                            }
-                        });
+                        mPullTriggered = true;
+                        post(() -> triggerPullToSearchFocus(appsView));
                     }
                 }
                 break;
             }
             case android.view.MotionEvent.ACTION_UP:
             case android.view.MotionEvent.ACTION_CANCEL: {
+                if (mPullTriggered) {
+                    mPullTriggered = false;
+                    post(() -> triggerPullToSearchFocus(appsView));
+                    postDelayed(() -> triggerPullToSearchFocus(appsView), 100);
+                }
                 mPullStartY = -1f;
                 mPullGestureActive = false;
                 break;

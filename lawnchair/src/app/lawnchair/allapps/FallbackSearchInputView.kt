@@ -22,6 +22,16 @@ class FallbackSearchInputView(context: Context, attrs: AttributeSet?) : Extended
         setCursorColor(accentColor)
         setTextSelectHandleColor(accentColor)
         highlightColor = ColorUtils.setAlphaComponent(accentColor, 82)
+        isCursorVisible = true
+    }
+
+    override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: android.graphics.Rect?) {
+        super.onFocusChanged(focused, direction, previouslyFocusedRect)
+        if (focused) {
+            isCursorVisible = true
+            val accentColor = ColorTokens.ColorAccent.resolveColor(context)
+            setCursorColor(accentColor)
+        }
     }
 
     override fun reset() {

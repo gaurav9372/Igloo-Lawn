@@ -469,11 +469,19 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                 layoutParams.height = resources.getDimensionPixelSize(R.dimen.search_box_container_height)
                 requestLayout()
             }
-            input.isFocusable = true
-            input.isFocusableInTouchMode = true
-            input.requestFocus()
-            Selection.setSelection(input.text ?: searchQueryBuilder, input.text?.length ?: 0)
-            input.showKeyboard()
+            val focusRunnable = Runnable {
+                input.isFocusable = true
+                input.isFocusableInTouchMode = true
+                input.isCursorVisible = true
+                input.requestFocusFromTouch()
+                input.requestFocus()
+                Selection.setSelection(input.text ?: searchQueryBuilder, input.text?.length ?: 0)
+                input.showKeyboard()
+            }
+            focusRunnable.run()
+            post(focusRunnable)
+            postDelayed(focusRunnable, 100)
+            postDelayed(focusRunnable, 250)
         }
     }
 
