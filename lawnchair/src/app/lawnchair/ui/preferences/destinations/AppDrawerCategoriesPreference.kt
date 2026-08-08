@@ -107,7 +107,7 @@ fun AppDrawerCategoriesPreference(
     val apps by appsState()
     val bottomSheetHandler = bottomSheetHandler
 
-    val hiddenApps = remember { prefs2.hiddenApps.get() }
+    val hiddenApps = prefs2.hiddenApps.firstCached()
     val claimedKeys = remember(categories) {
         categories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
     }

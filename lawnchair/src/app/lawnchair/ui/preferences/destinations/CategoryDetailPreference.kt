@@ -51,6 +51,7 @@ import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
 import androidx.compose.ui.platform.LocalContext
 import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.App
 import app.lawnchair.util.appsState
 import com.android.launcher3.R
@@ -68,7 +69,7 @@ fun CategoryDetailPreference(
     }
 
     val context = LocalContext.current
-    val hiddenApps = remember { PreferenceManager2.getInstance(context).hiddenApps.get() }
+    val hiddenApps = PreferenceManager2.getInstance(context).hiddenApps.firstCached()
     val categoryEntryState by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
     val allCategories by viewModel.categories.collectAsStateWithLifecycle()
     val apps by appsState()
