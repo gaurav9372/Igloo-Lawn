@@ -439,24 +439,31 @@ class LawnchairAlphabeticalAppsList<T>(
 
         val updatedList = categoryList.map { categoryEntry ->
             val categoryIdStr = categoryEntry.id.toString()
-            val keysForThisCat = (categoryKeyMap[categoryIdStr] ?: emptyList())
+            val keysForThisCatFromAdapter = (categoryKeyMap[categoryIdStr] ?: emptyList())
                 .filterNot { claimedKeys.contains(it) }
 
-            claimedKeys.addAll(keysForThisCat)
+            val finalKeys: List<String>
+            if (keysForThisCatFromAdapter.isNotEmpty()) {
+                claimedKeys.addAll(keysForThisCatFromAdapter)
 
-            val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
-                val ck = ComponentKey.fromString(key)
-                ck == null || appsStore.getApp(ck) == null
-            }.filterNot { claimedKeys.contains(it) }
+                val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                    val ck = ComponentKey.fromString(key)
+                    ck == null || appsStore.getApp(ck) == null
+                }.filterNot { claimedKeys.contains(it) }
 
-            val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
-                hiddenApps.contains(key)
-            }.filterNot { claimedKeys.contains(it) }
+                val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                    hiddenApps.contains(key)
+                }.filterNot { claimedKeys.contains(it) }
 
-            val finalKeys = (keysForThisCat + uninstalledCategoryApps + hiddenCategoryApps).distinct()
-            claimedKeys.addAll(finalKeys)
+                finalKeys = (keysForThisCatFromAdapter + uninstalledCategoryApps + hiddenCategoryApps).distinct()
+                claimedKeys.addAll(finalKeys)
 
-            categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, finalKeys)
+                categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, finalKeys)
+            } else {
+                finalKeys = categoryEntry.itemComponentKeys
+                claimedKeys.addAll(finalKeys)
+            }
+
             categoryEntry.copy(itemComponentKeys = finalKeys)
         }
         categoryList = updatedList.toMutableList()
