@@ -125,11 +125,10 @@ allprojects {
     }
 }
 
-final def buildCommit = providers.exec {
-    commandLine('git', 'rev-parse', '--short=7', 'HEAD')
-}.standardOutput.asText.get().trim()
-
 final def ciBuild = System.getenv("CI") == "true"
+final def buildCommit = ciBuild ? providers.exec {
+    commandLine('git', 'rev-parse', '--short=7', 'HEAD')
+}.standardOutput.asText.get().trim() : "dev"
 final def ciRef = System.getenv("GITHUB_REF") ?: ""
 final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
 final def isReleaseBuild = ciBuild
