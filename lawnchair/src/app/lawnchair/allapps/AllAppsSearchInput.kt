@@ -453,10 +453,28 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
 
     override fun resetSearch() {
         searchBarController.reset()
+        if (hideSearchBar) {
+            isGone = true
+            layoutParams.height = 0
+            requestLayout()
+        }
     }
 
     override fun setDirectFocus(directFocus: Boolean) {
         isDirectFocus = directFocus
+        if (directFocus) {
+            if (hideSearchBar) {
+                isGone = false
+                isVisible = true
+                layoutParams.height = resources.getDimensionPixelSize(R.dimen.search_box_container_height)
+                requestLayout()
+            }
+            input.isFocusable = true
+            input.isFocusableInTouchMode = true
+            input.requestFocus()
+            Selection.setSelection(input.text ?: searchQueryBuilder, input.text?.length ?: 0)
+            input.showKeyboard()
+        }
     }
 
     override fun preDispatchKeyEvent(event: KeyEvent) {
