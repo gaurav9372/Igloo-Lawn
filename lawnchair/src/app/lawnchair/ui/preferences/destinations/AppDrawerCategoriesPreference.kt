@@ -38,10 +38,13 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
+import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.util.appsState
 import app.lawnchair.ui.ModalBottomSheetContent
 import app.lawnchair.ui.preferences.LocalNavController
 import app.lawnchair.ui.preferences.components.controls.ClickablePreference
@@ -98,11 +101,36 @@ fun AppDrawerCategoriesPreference(
     onReorderCategories: (List<Int>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val prefs2 = remember { PreferenceManager2.getInstance(context) }
+    val apps by appsState()
     val bottomSheetHandler = bottomSheetHandler
-    val noCategoryEntry = remember { CategoryEntry(id = NO_CATEGORY_ID, title = "No Category") }
-    val displayList = remember(categories) {
+
+    val claimedKeys = remember(categories) {
+        categories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
+    }
+    val unassignedKeys = remember(apps, claimedKeys) {
+        apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) }
+    }
+    val noCategoryEntry = remember(unassignedKeys) {
+        CategoryEntry(id = NO_CATEGORY_ID, title = "No Category", itemComponentKeys = unassignedKeys)
+    }
+
+    val displayList = remember(categories, noCategoryEntry) {
         if (categories == null) emptyList()
-        else categories + noCategoryEntry
+        else {
+            val allList = categories + noCategoryEntry
+            val orderString = prefs2.categoryOrder.get()
+            if (orderString.isBlank()) {
+                allList
+            } else {
+                val orderList = orderString.split(",").mapNotNull { it.toIntOrNull() }
+                allList.sortedBy { entry ->
+                    val idx = orderList.indexOf(entry.id)
+                    if (idx != -1) idx else Int.MAX_VALUE
+                }
+            }
+        }
     }
     var categoryToDeletePending by remember { mutableStateOf<CategoryEntry?>(null) }
 

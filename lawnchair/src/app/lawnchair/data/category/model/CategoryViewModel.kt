@@ -20,8 +20,21 @@ class CategoryViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
     private val repository: CategoryService = CategoryService.INSTANCE.get(application)
+    private val prefs2 = PreferenceManager2.getInstance(application)
 
     val categories: StateFlow<List<CategoryEntry>?> = repository.getCategoriesFlow()
+        .map { list ->
+            val orderString = prefs2.categoryOrder.get()
+            if (orderString.isBlank()) {
+                list
+            } else {
+                val orderList = orderString.split(",").mapNotNull { it.toIntOrNull() }
+                list.sortedBy { entry ->
+                    val idx = orderList.indexOf(entry.id)
+                    if (idx != -1) idx else Int.MAX_VALUE
+                }
+            }
+        }
         .distinctUntilChanged()
         .catch { exception ->
             Log.e("CategoryViewModel", "Error in categories flow", exception)
@@ -83,8 +96,10 @@ class CategoryViewModel(
 
     fun reorderCategories(orderedIds: List<Int>) {
         viewModelScope.launch {
+            prefs2.categoryOrder.set(orderedIds.joinToString(","))
             val dbCategoryIds = orderedIds.filter { it != -100 }
             repository.reorderCategories(dbCategoryIds)
+            reloadHelper.reloadGrid()
         }
     }
 

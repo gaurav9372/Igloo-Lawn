@@ -211,6 +211,11 @@ class PreferenceManager2 @Inject constructor(
         defaultValue = ColorOption.fromString(context.getString(R.string.config_default_accent_color)),
     )
 
+    val categoryOrder = preference(
+        key = stringPreferencesKey(name = "category_order_pref"),
+        defaultValue = "",
+    )
+
     val hotseatBackgroundColor = preference(
         key = stringPreferencesKey(name = "hotseat_bg_color"),
         parse = ColorOption::fromString,
