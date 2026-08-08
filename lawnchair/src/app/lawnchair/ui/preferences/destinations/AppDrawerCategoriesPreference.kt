@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
 import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.appsState
 import app.lawnchair.ui.ModalBottomSheetContent
 import app.lawnchair.ui.preferences.LocalNavController
@@ -120,7 +121,7 @@ fun AppDrawerCategoriesPreference(
         if (categories == null) emptyList()
         else {
             val allList = categories + noCategoryEntry
-            val orderString = prefs2.categoryOrder.get()
+            val orderString = prefs2.categoryOrder.firstCached()
             if (orderString.isBlank()) {
                 allList
             } else {

@@ -6,7 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.service.CategoryService
+import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.preferences2.ReloadHelper
+import app.lawnchair.preferences2.firstCached
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,7 @@ class CategoryViewModel(
 
     val categories: StateFlow<List<CategoryEntry>?> = repository.getCategoriesFlow()
         .map { list ->
-            val orderString = prefs2.categoryOrder.get()
+            val orderString = prefs2.categoryOrder.firstCached()
             if (orderString.isBlank()) {
                 list
             } else {
