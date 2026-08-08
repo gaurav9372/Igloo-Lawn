@@ -65,9 +65,19 @@ fun CategoryDetailPreference(
         return
     }
 
-    val categoryEntry by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
+    val categoryEntryState by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
     val allCategories by viewModel.categories.collectAsStateWithLifecycle()
     val apps by appsState()
+
+    val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, apps) {
+        if (categoryInfoId == -100) {
+            val claimedKeys = allCategories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
+            val unassignedKeys = apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) }
+            CategoryEntry(id = -100, title = "No Category", itemComponentKeys = unassignedKeys)
+        } else {
+            categoryEntryState
+        }
+    }
 
     CategoryDetailPreference(
         categoryEntry = categoryEntry,
