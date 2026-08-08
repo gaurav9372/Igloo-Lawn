@@ -107,11 +107,12 @@ fun AppDrawerCategoriesPreference(
     val apps by appsState()
     val bottomSheetHandler = bottomSheetHandler
 
+    val hiddenApps = remember { prefs2.hiddenApps.get() }
     val claimedKeys = remember(categories) {
         categories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
     }
-    val unassignedKeys = remember(apps, claimedKeys) {
-        apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) }
+    val unassignedKeys = remember(apps, claimedKeys, hiddenApps) {
+        apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
     }
     val noCategoryEntry = remember(unassignedKeys) {
         CategoryEntry(id = NO_CATEGORY_ID, title = "No Category", itemComponentKeys = unassignedKeys)

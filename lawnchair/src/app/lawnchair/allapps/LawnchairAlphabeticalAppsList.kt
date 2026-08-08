@@ -18,6 +18,7 @@ import app.lawnchair.data.folder.model.FolderViewModel
 import app.lawnchair.launcher
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.categorizeAppsWithSystemAndGoogle
 import com.android.launcher3.InvariantDeviceProfile.OnIDPChangeListener
 import com.android.launcher3.allapps.AllAppsStore
@@ -158,7 +159,18 @@ class LawnchairAlphabeticalAppsList<T>(
         categoryViewModel.categories
             .onEach { categories ->
                 if (categories != null) {
-                    categoryList = categories.toMutableList()
+                    val noCategory = CategoryEntry(id = -100, title = "No Category")
+                    val fullList = categories + noCategory
+                    val orderString = PreferenceManager2.getInstance(context).categoryOrder.firstCached()
+                    val orderList = orderString.split(",").mapNotNull { it.toIntOrNull() }
+                    categoryList = if (orderString.isBlank()) {
+                        fullList
+                    } else {
+                        fullList.sortedBy { entry ->
+                            val idx = orderList.indexOf(entry.id)
+                            if (idx != -1) idx else Int.MAX_VALUE
+                        }
+                    }.toMutableList()
                     updateAdapterItems()
                     safeNotifyAdapter {
                         adapter?.notifyItemRangeChanged(0, adapter?.itemCount ?: 0)
@@ -193,152 +205,159 @@ class LawnchairAlphabeticalAppsList<T>(
             val globalProcessedFolderIds = mutableSetOf<Int>()
             val isAccordion = categoriesAsAccordions
 
+            val allUserClaimedKeys = categoryList
+                .filter { it.id != -100 }
+                .flatMap { it.itemComponentKeys }
+                .toSet()
+
             categoryList.forEach { categoryEntry ->
-                val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
-                    if (hiddenApps.contains(keyString)) return@mapNotNull null
-                    val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                    appsStore.getApp(componentKey) as? AppInfo
-                }
+                if (categoryEntry.id == -100) {
+                    val unassignedOrder = prefs.unassignedCategoryOrder.get()
+                        .split("|")
+                        .filter { it.isNotBlank() }
 
-                if (resolvedApps.isNotEmpty()) {
-                    val categoryIdStr = categoryEntry.id.toString()
-                    val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
-                    val headerItem = AdapterItem.asCategoryHeader(categoryEntry.title, resolvedApps.size).apply {
-                        categoryId = categoryIdStr
-                        this.isAccordion = isAccordion
-                        this.isCollapsed = isCollapsed
+                    val unassignedApps = validApps.filterNot { app ->
+                        val appKey = app.toComponentKey().toString()
+                        allUserClaimedKeys.contains(appKey) || globalProcessedAppKeys.contains(appKey)
+                    }.sortedBy { app ->
+                        val key = app.toComponentKey().toString()
+                        val idx = unassignedOrder.indexOf(key)
+                        if (idx != -1) idx else Int.MAX_VALUE
                     }
-                    mAdapterItems.add(headerItem)
-                    position++
 
-                    if (!isCollapsed) {
-                        resolvedApps.forEach { appInfo ->
-                            val appKey = appInfo.toComponentKey().toString()
-                            assignedAppKeys.add(appKey)
+                    if (unassignedApps.isNotEmpty()) {
+                        val categoryIdStr = "-100"
+                        val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
+                        val headerItem = AdapterItem.asCategoryHeader("No Category", unassignedApps.size).apply {
+                            categoryId = categoryIdStr
+                            this.isAccordion = isAccordion
+                            this.isCollapsed = isCollapsed
+                        }
+                        mAdapterItems.add(headerItem)
+                        position++
 
-                            if (!globalProcessedAppKeys.contains(appKey)) {
-                                val targetFolder = folderList.find { folderEntry ->
-                                    !globalProcessedFolderIds.contains(folderEntry.id) &&
-                                        folderEntry.itemComponentKeys.contains(appKey)
-                                }
+                        if (!isCollapsed) {
+                            unassignedApps.forEach { appInfo ->
+                                val appKey = appInfo.toComponentKey().toString()
 
-                                var folderAdded = false
-                                if (targetFolder != null) {
-                                    val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
-                                        if (hiddenApps.contains(keyString)) return@mapNotNull null
-                                        val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                        appsStore.getApp(componentKey) as? AppInfo
+                                if (!globalProcessedAppKeys.contains(appKey)) {
+                                    val targetFolder = folderList.find { folderEntry ->
+                                        !globalProcessedFolderIds.contains(folderEntry.id) &&
+                                            folderEntry.itemComponentKeys.contains(appKey)
                                     }
 
-                                    if (folderApps.size >= 2) {
-                                        val folderInfo = FolderInfo().apply {
-                                            id = targetFolder.id
-                                            title = targetFolder.title
-                                            container = ItemInfo.NO_ID
-                                            folderApps.forEach { add(it) }
+                                    var folderAdded = false
+                                    if (targetFolder != null) {
+                                        val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
+                                            if (hiddenApps.contains(keyString)) return@mapNotNull null
+                                            val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                                            val app = appsStore.getApp(componentKey) as? AppInfo
+                                            if (app != null && unassignedApps.contains(app)) app else null
                                         }
-                                        val folderAdapterItem = AdapterItem.asFolder(folderInfo)
-                                        folderAdapterItem.categoryId = categoryIdStr
-                                        mAdapterItems.add(folderAdapterItem)
+
+                                        if (folderApps.size >= 2) {
+                                            val folderInfo = FolderInfo().apply {
+                                                id = targetFolder.id
+                                                title = if (targetFolder.title.isNullOrBlank()) "Folder" else targetFolder.title
+                                                container = ItemInfo.NO_ID
+                                                folderApps.forEach { add(it) }
+                                            }
+                                            val folderAdapterItem = AdapterItem.asFolder(folderInfo)
+                                            folderAdapterItem.categoryId = categoryIdStr
+                                            mAdapterItems.add(folderAdapterItem)
+                                            position++
+                                            globalProcessedFolderIds.add(targetFolder.id)
+                                            folderAdded = true
+
+                                            folderApps.forEach { info ->
+                                                val key = info.toComponentKey().toString()
+                                                globalProcessedAppKeys.add(key)
+                                            }
+                                        }
+                                    }
+
+                                    if (!folderAdded && !globalProcessedAppKeys.contains(appKey)) {
+                                        val item = AdapterItem.asApp(appInfo)
+                                        item.categoryId = categoryIdStr
+                                        mAdapterItems.add(item)
+                                        globalProcessedAppKeys.add(appKey)
                                         position++
-                                        globalProcessedFolderIds.add(targetFolder.id)
-                                        folderAdded = true
-
-                                        folderApps.forEach { info ->
-                                            val key = info.toComponentKey().toString()
-                                            globalProcessedAppKeys.add(key)
-                                            assignedAppKeys.add(key)
-                                        }
                                     }
                                 }
-
-                                if (!folderAdded && !globalProcessedAppKeys.contains(appKey)) {
-                                    val item = AdapterItem.asApp(appInfo)
-                                    item.categoryId = categoryIdStr
-                                    mAdapterItems.add(item)
-                                    globalProcessedAppKeys.add(appKey)
-                                    position++
-                                }
                             }
-                        }
-                    } else {
-                        resolvedApps.forEach { appInfo ->
-                            assignedAppKeys.add(appInfo.toComponentKey().toString())
                         }
                     }
-                }
-            }
+                } else {
+                    val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
+                        if (hiddenApps.contains(keyString)) return@mapNotNull null
+                        val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                        appsStore.getApp(componentKey) as? AppInfo
+                    }
 
-            val unassignedOrder = prefs.unassignedCategoryOrder.get()
-                .split("|")
-                .filter { it.isNotBlank() }
+                    if (resolvedApps.isNotEmpty()) {
+                        val categoryIdStr = categoryEntry.id.toString()
+                        val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
+                        val headerItem = AdapterItem.asCategoryHeader(categoryEntry.title, resolvedApps.size).apply {
+                            categoryId = categoryIdStr
+                            this.isAccordion = isAccordion
+                            this.isCollapsed = isCollapsed
+                        }
+                        mAdapterItems.add(headerItem)
+                        position++
 
-            val unassignedApps = validApps.filterNot { app ->
-                val appKey = app.toComponentKey().toString()
-                assignedAppKeys.contains(appKey) || globalProcessedAppKeys.contains(appKey)
-            }.sortedBy { app ->
-                val key = app.toComponentKey().toString()
-                val idx = unassignedOrder.indexOf(key)
-                if (idx != -1) idx else Int.MAX_VALUE
-            }
+                        if (!isCollapsed) {
+                            resolvedApps.forEach { appInfo ->
+                                val appKey = appInfo.toComponentKey().toString()
+                                assignedAppKeys.add(appKey)
 
-            if (unassignedApps.isNotEmpty()) {
-                val categoryIdStr = "no_category"
-                val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
-                val headerItem = AdapterItem.asCategoryHeader("No Category", unassignedApps.size).apply {
-                    categoryId = categoryIdStr
-                    this.isAccordion = isAccordion
-                    this.isCollapsed = isCollapsed
-                }
-                mAdapterItems.add(headerItem)
-                position++
-
-                if (!isCollapsed) {
-                    unassignedApps.forEach { appInfo ->
-                        val appKey = appInfo.toComponentKey().toString()
-
-                        if (!globalProcessedAppKeys.contains(appKey)) {
-                            val targetFolder = folderList.find { folderEntry ->
-                                !globalProcessedFolderIds.contains(folderEntry.id) &&
-                                    folderEntry.itemComponentKeys.contains(appKey)
-                            }
-
-                            var folderAdded = false
-                            if (targetFolder != null) {
-                                val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
-                                    if (hiddenApps.contains(keyString)) return@mapNotNull null
-                                    val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                    val app = appsStore.getApp(componentKey) as? AppInfo
-                                    if (app != null && unassignedApps.contains(app)) app else null
-                                }
-
-                                if (folderApps.size >= 2) {
-                                    val folderInfo = FolderInfo().apply {
-                                        id = targetFolder.id
-                                        title = if (targetFolder.title.isNullOrBlank()) "Folder" else targetFolder.title
-                                        container = ItemInfo.NO_ID
-                                        folderApps.forEach { add(it) }
+                                if (!globalProcessedAppKeys.contains(appKey)) {
+                                    val targetFolder = folderList.find { folderEntry ->
+                                        !globalProcessedFolderIds.contains(folderEntry.id) &&
+                                            folderEntry.itemComponentKeys.contains(appKey)
                                     }
-                                    val folderAdapterItem = AdapterItem.asFolder(folderInfo)
-                                    folderAdapterItem.categoryId = categoryIdStr
-                                    mAdapterItems.add(folderAdapterItem)
-                                    position++
-                                    globalProcessedFolderIds.add(targetFolder.id)
-                                    folderAdded = true
 
-                                    folderApps.forEach { info ->
-                                        val key = info.toComponentKey().toString()
-                                        globalProcessedAppKeys.add(key)
+                                    var folderAdded = false
+                                    if (targetFolder != null) {
+                                        val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
+                                            if (hiddenApps.contains(keyString)) return@mapNotNull null
+                                            val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                                            appsStore.getApp(componentKey) as? AppInfo
+                                        }
+
+                                        if (folderApps.size >= 2) {
+                                            val folderInfo = FolderInfo().apply {
+                                                id = targetFolder.id
+                                                title = targetFolder.title
+                                                container = ItemInfo.NO_ID
+                                                folderApps.forEach { add(it) }
+                                            }
+                                            val folderAdapterItem = AdapterItem.asFolder(folderInfo)
+                                            folderAdapterItem.categoryId = categoryIdStr
+                                            mAdapterItems.add(folderAdapterItem)
+                                            position++
+                                            globalProcessedFolderIds.add(targetFolder.id)
+                                            folderAdded = true
+
+                                            folderApps.forEach { info ->
+                                                val key = info.toComponentKey().toString()
+                                                globalProcessedAppKeys.add(key)
+                                                assignedAppKeys.add(key)
+                                            }
+                                        }
+                                    }
+
+                                    if (!folderAdded && !globalProcessedAppKeys.contains(appKey)) {
+                                        val item = AdapterItem.asApp(appInfo)
+                                        item.categoryId = categoryIdStr
+                                        mAdapterItems.add(item)
+                                        globalProcessedAppKeys.add(appKey)
+                                        position++
                                     }
                                 }
                             }
-
-                            if (!folderAdded && !globalProcessedAppKeys.contains(appKey)) {
-                                val item = AdapterItem.asApp(appInfo)
-                                item.categoryId = categoryIdStr
-                                mAdapterItems.add(item)
-                                globalProcessedAppKeys.add(appKey)
-                                position++
+                        } else {
+                            resolvedApps.forEach { appInfo ->
+                                assignedAppKeys.add(appInfo.toComponentKey().toString())
                             }
                         }
                     }

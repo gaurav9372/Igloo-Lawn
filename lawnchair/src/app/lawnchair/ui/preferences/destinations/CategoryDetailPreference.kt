@@ -49,6 +49,8 @@ import app.lawnchair.ui.preferences.components.AppItem
 import app.lawnchair.ui.preferences.components.layout.LoadingScreen
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
+import androidx.compose.ui.platform.LocalContext
+import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.util.App
 import app.lawnchair.util.appsState
 import com.android.launcher3.R
@@ -65,14 +67,16 @@ fun CategoryDetailPreference(
         return
     }
 
+    val context = LocalContext.current
+    val hiddenApps = remember { PreferenceManager2.getInstance(context).hiddenApps.get() }
     val categoryEntryState by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
     val allCategories by viewModel.categories.collectAsStateWithLifecycle()
     val apps by appsState()
 
-    val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, apps) {
+    val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, apps, hiddenApps) {
         if (categoryInfoId == -100) {
             val claimedKeys = allCategories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
-            val unassignedKeys = apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) }
+            val unassignedKeys = apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
             CategoryEntry(id = -100, title = "No Category", itemComponentKeys = unassignedKeys)
         } else {
             categoryEntryState
