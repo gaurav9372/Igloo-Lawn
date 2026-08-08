@@ -302,14 +302,23 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
             }
         }
 
+        var searchDebounceRunnable: Runnable? = null
         input.addTextChangedListener(
             beforeTextChanged = { _, _, _, _ ->
                 hint.isInvisible = true
             },
-            afterTextChanged = {
+            afterTextChanged = { editable ->
                 updateHint()
-                if (it != null) {
-                    searchBarController.afterTextChanged(it)
+                if (editable != null) {
+                    searchDebounceRunnable?.let { removeCallbacks(it) }
+                    val currentText = editable.toString()
+                    if (currentText.isEmpty()) {
+                        searchBarController.afterTextChanged(editable)
+                    } else {
+                        val runnable = Runnable { searchBarController.afterTextChanged(editable) }
+                        searchDebounceRunnable = runnable
+                        postDelayed(runnable, 60)
+                    }
                 }
                 if (input.text.isNullOrEmpty() && input.hasFocus() && !input.isResetting) {
                     searchAlgorithm?.doZeroStateSearch(this)
@@ -320,7 +329,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     launcher.stateManager.goToState(LauncherState.NORMAL)
                 }
 
-                val isEmpty = it.isNullOrEmpty()
+                val isEmpty = editable.isNullOrEmpty()
                 if (isEmpty && !input.hasFocus()) {
                     animatePadding(currentPaddingLeft, currentPaddingRight)
                 }

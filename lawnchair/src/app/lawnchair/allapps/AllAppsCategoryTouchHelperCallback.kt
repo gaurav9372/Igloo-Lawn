@@ -263,10 +263,13 @@ class AllAppsCategoryTouchHelperCallback(
 
             val targetCx = child.left + child.translationX + child.width / 2f
             val targetCy = child.top + child.translationY + child.height / 2f
-            val dist = Math.hypot((dragCx - targetCx).toDouble(), (dragCy - targetCy).toDouble()).toFloat()
+            val dx = dragCx - targetCx
+            val dy = dragCy - targetCy
+            val distSq = dx * dx + dy * dy
             val hoverRadius = child.width * 0.45f
+            val hoverRadiusSq = hoverRadius * hoverRadius
 
-            if (dist < hoverRadius) {
+            if (distSq < hoverRadiusSq) {
                 newHoverTarget = childHolder
                 break
             }

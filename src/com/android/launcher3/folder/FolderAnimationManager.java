@@ -322,6 +322,7 @@ public class FolderAnimationManager implements FolderAnimationCreator {
                 mCellLayoutClipChildren = mCellLayout.getClipChildren();
                 mCellLayoutClipPadding = mCellLayout.getClipToPadding();
 
+                mFolder.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 mFolder.setClipChildren(false);
                 mFolder.setClipToPadding(false);
                 mContent.setClipChildren(false);
@@ -333,6 +334,7 @@ public class FolderAnimationManager implements FolderAnimationCreator {
             @Override
             public void onAnimationEnd(Animator animation) {
                 super.onAnimationEnd(animation);
+                mFolder.setLayerType(View.LAYER_TYPE_NONE, null);
                 mFolder.setTranslationX(0.0f);
                 mFolder.setTranslationY(0.0f);
                 mFolder.setTranslationZ(0.0f);
