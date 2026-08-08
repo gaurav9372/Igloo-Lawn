@@ -62,7 +62,8 @@ class SearchItemBackground(
     }
 
     fun draw(c: Canvas, child: View, isFocused: Boolean) {
-        val color = if (isFocused) focusHighlight else groupHighlight
+        val activeFocused = if (child is SearchResultIcon) false else isFocused
+        val color = if (activeFocused) focusHighlight else groupHighlight
         if (color == 0) return
 
         paint.color = color
