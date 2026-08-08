@@ -1,0 +1,11 @@
+# Baseline Profile Rules for Lawnchair Launcher Critical Paths
+Lapp/lawnchair/allapps/LawnchairAlphabeticalAppsList;
+Lapp/lawnchair/allapps/views/SearchItemBackground;
+Lapp/lawnchair/allapps/views/SearchResultIcon;
+Lapp/lawnchair/allapps/AllAppsSearchInput;
+Lcom/android/launcher3/folder/FolderAnimationManager;
+Lcom/android/launcher3/folder/FolderIcon;
+Lcom/android/launcher3/folder/PreviewBackground;
+Lcom/android/launcher3/allapps/AllAppsRecyclerView;
+Lcom/android/launcher3/Workspace;
+Lcom/android/launcher3/CellLayout;
