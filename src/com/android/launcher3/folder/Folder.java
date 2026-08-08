@@ -1562,12 +1562,13 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        int minTitleWidth = getResources().getDimensionPixelSize(R.dimen.folder_title_min_width);
-        if (enableLauncherVisualRefresh() && mFolderName.getMeasuredWidth() < minTitleWidth) {
-            ((MarginLayoutParams) mFolderName.getLayoutParams()).setMarginEnd(0);
-            // The post is necessary for margins to be recalculated. RTL UI is shifted otherwise.
-            mFolderName.post(() -> mFolderName.setVisibility(View.GONE));
-            mFooter.setGravity(Gravity.END);
+        if (mFolderName != null) {
+            mFolderName.setVisibility(View.VISIBLE);
+            mFolderName.setAlpha(1f);
+        }
+        if (mFooter != null) {
+            mFooter.setVisibility(View.VISIBLE);
+            mFooter.setAlpha(1f);
         }
     }
 
