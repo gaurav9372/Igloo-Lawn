@@ -76,8 +76,9 @@ fun CategoryDetailPreference(
 
     val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, apps, hiddenApps) {
         if (categoryInfoId == -100) {
+            val mainProfileApps = apps.filter { it.key.user == android.os.Process.myUserHandle() }
             val claimedKeys = allCategories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
-            val unassignedKeys = apps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
+            val unassignedKeys = mainProfileApps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
             CategoryEntry(id = -100, title = "No Category", itemComponentKeys = unassignedKeys)
         } else {
             categoryEntryState

@@ -7,6 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -156,28 +157,33 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     private fun observeCategories() {
-        categoryViewModel.categories
-            .onEach { categories ->
-                if (categories != null) {
-                    val noCategory = CategoryEntry(id = -100, title = "No Category")
-                    val fullList = categories + noCategory
-                    val orderString = PreferenceManager2.getInstance(context).categoryOrder.firstCached()
-                    val orderList = orderString.split(",").mapNotNull { it.toIntOrNull() }
-                    categoryList = if (orderString.isBlank()) {
-                        fullList
-                    } else {
-                        fullList.sortedBy { entry ->
-                            val idx = orderList.indexOf(entry.id)
-                            if (idx != -1) idx else Int.MAX_VALUE
-                        }
-                    }.toMutableList()
-                    updateAdapterItems()
-                    safeNotifyAdapter {
-                        adapter?.notifyItemRangeChanged(0, adapter?.itemCount ?: 0)
+        val prefs2 = PreferenceManager2.getInstance(context)
+        combine(
+            categoryViewModel.categories,
+            prefs2.categoryOrder.get(),
+        ) { categories, orderString ->
+            if (categories != null) {
+                val noCategory = CategoryEntry(id = -100, title = "No Category")
+                val fullList = categories + noCategory
+                val orderList = orderString.split(",").mapNotNull { it.toIntOrNull() }
+                if (orderString.isBlank()) {
+                    fullList
+                } else {
+                    fullList.sortedBy { entry ->
+                        val idx = orderList.indexOf(entry.id)
+                        if (idx != -1) idx else Int.MAX_VALUE
                     }
                 }
+            } else null
+        }
+        .onEach { sortedCategories ->
+            if (sortedCategories != null) {
+                categoryList = sortedCategories.toMutableList()
+                updateAdapterItems()
+                onAppsUpdated()
             }
-            .launchIn(context.launcher.lifecycleScope)
+        }
+        .launchIn(context.launcher.lifecycleScope)
     }
 
     override fun updateItemFilter(itemFilter: Predicate<ItemInfo>?) {
