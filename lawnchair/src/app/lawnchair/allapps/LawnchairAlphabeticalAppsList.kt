@@ -249,7 +249,8 @@ class LawnchairAlphabeticalAppsList<T>(
                                 if (!globalProcessedAppKeys.contains(appKey)) {
                                     val targetFolder = folderList.find { folderEntry ->
                                         !globalProcessedFolderIds.contains(folderEntry.id) &&
-                                            folderEntry.itemComponentKeys.contains(appKey)
+                                            folderEntry.itemComponentKeys.contains(appKey) &&
+                                            folderEntry.itemComponentKeys.none { allUserClaimedKeys.contains(it) }
                                     }
 
                                     var folderAdded = false
