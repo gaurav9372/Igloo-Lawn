@@ -788,4 +788,175 @@ fun addAppsToHomescreen(launcher: LawnchairLauncher, appInfos: List<com.android.
             }
         }
     }
+
+    @JvmStatic
+    fun showFolderContextMenu(
+        folderIcon: com.android.launcher3.folder.FolderIcon,
+        folderInfo: com.android.launcher3.model.data.FolderInfo,
+    ) {
+        val context = folderIcon.context
+        val launcher = com.android.launcher3.Launcher.getLauncher(context)
+
+        val editCategoryItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
+            context,
+            R.string.edit_category,
+            R.drawable.ic_setting,
+            com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
+            View.OnLongClickListener { _ ->
+                AbstractFloatingView.closeAllOpenViews(launcher)
+                ComposeBottomSheet.show(
+                    context = launcher,
+                    contentPaddings = PaddingValues(bottom = 16.dp),
+                ) {
+                    SelectFolderCategoryDialog(
+                        folderInfo = folderInfo,
+                        onClose = { ComposeBottomSheet.closeCurrentSheet(launcher) },
+                    )
+                }
+                true
+            },
+        )
+
+        val deleteFolderItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
+            context.getText(R.string.delete),
+            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_uninstall_no_shadow),
+            com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
+            View.OnLongClickListener { _ ->
+                AbstractFloatingView.closeAllOpenViews(launcher)
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderInfo.id)
+                    Toast.makeText(context, "Folder deleted", Toast.LENGTH_SHORT).show()
+                }
+                true
+            },
+        )
+
+        val items = arrayListOf(editCategoryItem, deleteFolderItem)
+        val targetRect = android.graphics.RectF()
+        val loc = IntArray(2)
+        folderIcon.getLocationOnScreen(loc)
+        targetRect.set(
+            loc[0].toFloat(),
+            loc[1].toFloat(),
+            (loc[0] + folderIcon.width).toFloat(),
+            (loc[1] + folderIcon.height).toFloat(),
+        )
+
+        com.android.launcher3.views.OptionsPopupView.show(launcher, targetRect, items, true)
+    }
+}
+
+@Composable
+fun SelectFolderCategoryDialog(
+    folderInfo: com.android.launcher3.model.data.FolderInfo,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val categoryService = remember { CategoryService.INSTANCE.get(context) }
+    val categories by categoryService.getCategoriesFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    val folderApps = remember(folderInfo) {
+        folderInfo.contents.mapNotNull { item ->
+            val comp = item.targetComponent ?: item.getIntent()?.component
+            if (comp != null) {
+                ComponentKey(comp, item.user).toString()
+            } else null
+        }
+    }
+
+    val currentCategory = remember(categories, folderApps) {
+        categories.find { cat -> folderApps.any { cat.itemComponentKeys.contains(it) } }
+    }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(id = R.string.select_category_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            val title = folderInfo.title?.toString() ?: "Folder"
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(id = android.R.string.cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        item {
+                            val isUnassigned = currentCategory == null
+                            CategoryRowItem(
+                                label = "No Category",
+                                subtitle = if (isUnassigned) "Current" else null,
+                                isSelected = isUnassigned,
+                                onClick = {
+                                    scope.launch {
+                                        if (folderApps.isNotEmpty()) {
+                                            categoryService.moveAppsToCategory(folderApps, 0)
+                                        }
+                                        Toast.makeText(context, "Moved to No Category", Toast.LENGTH_SHORT).show()
+                                        onClose()
+                                    }
+                                },
+                            )
+                        }
+                        items(categories) { category ->
+                            val isSelected = currentCategory?.id == category.id
+                            val count = category.itemComponentKeys.size
+                            CategoryRowItem(
+                                label = category.title,
+                                subtitle = if (isSelected) "Current ($count apps)" else "$count apps",
+                                isSelected = isSelected,
+                                onClick = {
+                                    scope.launch {
+                                        if (folderApps.isNotEmpty()) {
+                                            categoryService.moveAppsToCategory(folderApps, category.id)
+                                        }
+                                        Toast.makeText(context, "Moved to ${category.title}", Toast.LENGTH_SHORT).show()
+                                        onClose()
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

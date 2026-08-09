@@ -145,6 +145,13 @@ public class ItemLongClickListener {
         View v = (view instanceof BubbleTextHolder)
                 ? ((BubbleTextHolder) view).getBubbleText()
                 : view;
+        if (v instanceof com.android.launcher3.folder.FolderIcon folderIcon) {
+            com.android.launcher3.model.data.FolderInfo folderInfo = folderIcon.mInfo;
+            if (folderInfo != null) {
+                app.lawnchair.ui.popup.LawnchairShortcut.showFolderContextMenu(folderIcon, folderInfo);
+                return true;
+            }
+        }
         if (app.lawnchair.allapps.MultiSelectManager.INSTANCE.isMultiSelectActive().getValue()) {
             if (v.getTag() instanceof ItemInfo itemInfo && itemInfo.getTargetComponent() != null) {
                 String key = new com.android.launcher3.util.ComponentKey(itemInfo.getTargetComponent(), itemInfo.user).toString();
