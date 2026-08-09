@@ -198,6 +198,67 @@ class LawnchairShortcut {
 
             PauseApps(activity, itemInfo, originalView)
         }
+
+        @JvmStatic
+        fun showFolderContextMenu(
+            folderIcon: com.android.launcher3.folder.FolderIcon,
+            folderInfo: com.android.launcher3.model.data.FolderInfo,
+        ) {
+            val context = folderIcon.context
+            val launcher = com.android.launcher3.Launcher.getLauncher(context)
+
+            val editCategoryItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
+                context,
+                R.string.edit_category,
+                R.drawable.ic_setting,
+                com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
+                View.OnLongClickListener { _ ->
+                    AbstractFloatingView.closeAllOpenViews(launcher)
+                    ComposeBottomSheet.show(
+                        context = launcher,
+                        contentPaddings = PaddingValues(bottom = 16.dp),
+                    ) {
+                        SelectFolderCategoryDialog(
+                            folderInfo = folderInfo,
+                            onClose = { AbstractFloatingView.closeAllOpenViews(launcher) },
+                        )
+                    }
+                    true
+                },
+            )
+
+            val deleteFolderItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
+                context.getString(R.string.remove_drop_target_label),
+                androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_uninstall_no_shadow),
+                com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
+                View.OnLongClickListener { _ ->
+                    AbstractFloatingView.closeAllOpenViews(launcher)
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderInfo.id)
+                        Toast.makeText(context, "Folder deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                },
+            )
+
+            val items = arrayListOf(editCategoryItem, deleteFolderItem)
+            val targetRect = android.graphics.RectF()
+            val loc = IntArray(2)
+            folderIcon.getLocationOnScreen(loc)
+            targetRect.set(
+                loc[0].toFloat(),
+                loc[1].toFloat(),
+                (loc[0] + folderIcon.width).toFloat(),
+                (loc[1] + folderIcon.height).toFloat(),
+            )
+
+            com.android.launcher3.views.OptionsPopupView.show<com.android.launcher3.Launcher>(
+                launcher,
+                targetRect,
+                items,
+                true,
+            )
+        }
     }
 
     class Customize(
@@ -788,62 +849,6 @@ fun addAppsToHomescreen(launcher: LawnchairLauncher, appInfos: List<com.android.
             }
         }
     }
-
-    @JvmStatic
-    fun showFolderContextMenu(
-        folderIcon: com.android.launcher3.folder.FolderIcon,
-        folderInfo: com.android.launcher3.model.data.FolderInfo,
-    ) {
-        val context = folderIcon.context
-        val launcher = com.android.launcher3.Launcher.getLauncher(context)
-
-        val editCategoryItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
-            context,
-            R.string.edit_category,
-            R.drawable.ic_setting,
-            com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
-            View.OnLongClickListener { _ ->
-                AbstractFloatingView.closeAllOpenViews(launcher)
-                ComposeBottomSheet.show(
-                    context = launcher,
-                    contentPaddings = PaddingValues(bottom = 16.dp),
-                ) {
-                    SelectFolderCategoryDialog(
-                        folderInfo = folderInfo,
-                        onClose = { ComposeBottomSheet.closeCurrentSheet(launcher) },
-                    )
-                }
-                true
-            },
-        )
-
-        val deleteFolderItem = com.android.launcher3.views.OptionsPopupView.OptionItem(
-            context.getText(R.string.delete),
-            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_uninstall_no_shadow),
-            com.android.launcher3.logging.StatsLogManager.LauncherEvent.IGNORE,
-            View.OnLongClickListener { _ ->
-                AbstractFloatingView.closeAllOpenViews(launcher)
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderInfo.id)
-                    Toast.makeText(context, "Folder deleted", Toast.LENGTH_SHORT).show()
-                }
-                true
-            },
-        )
-
-        val items = arrayListOf(editCategoryItem, deleteFolderItem)
-        val targetRect = android.graphics.RectF()
-        val loc = IntArray(2)
-        folderIcon.getLocationOnScreen(loc)
-        targetRect.set(
-            loc[0].toFloat(),
-            loc[1].toFloat(),
-            (loc[0] + folderIcon.width).toFloat(),
-            (loc[1] + folderIcon.height).toFloat(),
-        )
-
-        com.android.launcher3.views.OptionsPopupView.show(launcher, targetRect, items, true)
-    }
 }
 
 @Composable
@@ -857,7 +862,7 @@ fun SelectFolderCategoryDialog(
     val categories by categoryService.getCategoriesFlow().collectAsStateWithLifecycle(initialValue = emptyList())
 
     val folderApps = remember(folderInfo) {
-        folderInfo.contents.mapNotNull { item ->
+        folderInfo.getContents().mapNotNull { item ->
             val comp = item.targetComponent ?: item.getIntent()?.component
             if (comp != null) {
                 ComponentKey(comp, item.user).toString()
