@@ -211,10 +211,17 @@ class LawnchairAlphabeticalAppsList<T>(
             val globalProcessedFolderIds = mutableSetOf<Int>()
             val isAccordion = categoriesAsAccordions
 
-            val allUserClaimedKeys = categoryList
+            val directUserCategoryKeys = categoryList
                 .filter { it.id != -100 }
                 .flatMap { it.itemComponentKeys }
                 .toSet()
+
+            val userCategoryFolderAppKeys = folderList
+                .filter { folder -> folder.itemComponentKeys.any { directUserCategoryKeys.contains(it) } }
+                .flatMap { it.itemComponentKeys }
+                .toSet()
+
+            val allUserClaimedKeys = directUserCategoryKeys + userCategoryFolderAppKeys
 
             categoryList.forEach { categoryEntry ->
                 if (categoryEntry.id == -100) {
@@ -295,7 +302,13 @@ class LawnchairAlphabeticalAppsList<T>(
                         }
                     }
                 } else {
-                    val resolvedApps = categoryEntry.itemComponentKeys.mapNotNull { keyString ->
+                    val catFolderAppKeys = folderList
+                        .filter { folder -> folder.itemComponentKeys.any { categoryEntry.itemComponentKeys.contains(it) } }
+                        .flatMap { it.itemComponentKeys }
+
+                    val fullCategoryAppKeys = (categoryEntry.itemComponentKeys + catFolderAppKeys).distinct()
+
+                    val resolvedApps = fullCategoryAppKeys.mapNotNull { keyString ->
                         if (hiddenApps.contains(keyString)) return@mapNotNull null
                         val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
                         appsStore.getApp(componentKey) as? AppInfo
