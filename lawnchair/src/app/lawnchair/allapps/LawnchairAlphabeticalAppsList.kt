@@ -147,10 +147,7 @@ class LawnchairAlphabeticalAppsList<T>(
                             if (index == -1) Int.MAX_VALUE else index
                         }
                         .toMutableList()
-                    updateAdapterItems()
-                    safeNotifyAdapter {
-                        adapter?.notifyItemRangeChanged(0, adapter?.itemCount ?: 0)
-                    }
+                    onAppsUpdated()
                 }
             }
             .launchIn(context.launcher.lifecycleScope)
@@ -179,7 +176,6 @@ class LawnchairAlphabeticalAppsList<T>(
         .onEach { sortedCategories ->
             if (sortedCategories != null) {
                 categoryList = sortedCategories.toMutableList()
-                updateAdapterItems()
                 onAppsUpdated()
             }
         }
@@ -196,16 +192,21 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
-        if (appList.isNullOrEmpty()) return startPosition
+        var effectiveAppList = appList
+        if (effectiveAppList.isNullOrEmpty() && mAppsStore != null && mAppsStore.apps.isNotEmpty()) {
+            onAppsUpdated()
+            effectiveAppList = mApps
+        }
+        if (effectiveAppList.isNullOrEmpty()) return startPosition
         val drawerListDefault = prefs.drawerList.get()
         filteredList.clear()
         var position = startPosition
 
         // Show app drawer folders only on main profile, to prevent state complexity
-        if (isWorkOrPrivateSpace(appList)) return super.addAppsWithSections(appList, position)
+        if (isWorkOrPrivateSpace(effectiveAppList)) return super.addAppsWithSections(effectiveAppList, position)
 
         if (categoryList.isNotEmpty()) {
-            val validApps = appList.mapNotNull { it }
+            val validApps = effectiveAppList.mapNotNull { it }
             val assignedAppKeys = mutableSetOf<String>()
             val globalProcessedAppKeys = mutableSetOf<String>()
             val globalProcessedFolderIds = mutableSetOf<Int>()
@@ -387,7 +388,7 @@ class LawnchairAlphabeticalAppsList<T>(
         }
 
         if (!drawerListDefault) {
-            val validApps = appList.mapNotNull { it }
+            val validApps = effectiveAppList.mapNotNull { it }
             val finalCategorizedApps = categorizeAppsWithSystemAndGoogle(validApps, context)
 
             finalCategorizedApps.forEach { (category, apps) ->

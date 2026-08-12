@@ -572,6 +572,13 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
      * @param exitSearch Whether to force exit the search state and return to A-Z apps list.
      */
     public void reset(boolean animate, boolean exitSearch) {
+        for (AdapterHolder holder : mAH) {
+            if (holder != null && holder.mAppsList != null) {
+                if (holder.mAppsList.getAdapterItems().isEmpty() && mAllAppsStore.getApps().length > 0) {
+                    holder.mAppsList.onAppsUpdated();
+                }
+            }
+        }
         // Scroll Main and Work RV to top. Search RV is done in `resetSearch`.
         if (!PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
             for (int i = 0; i < mAH.size(); i++) {
@@ -1248,6 +1255,11 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
                 .anyMatch(mWorkManager.getItemInfoMatcher());
         mHasPrivateApps = Stream.of(mAllAppsStore.getApps())
                 .anyMatch(mPrivateProfileManager.getItemInfoMatcher());
+        for (AdapterHolder holder : mAH) {
+            if (holder != null && holder.mAppsList != null) {
+                holder.mAppsList.onAppsUpdated();
+            }
+        }
         if (!isSearching()) {
             rebindAdapters();
         }
