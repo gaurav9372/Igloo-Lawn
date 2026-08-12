@@ -2461,8 +2461,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (mLauncher.getDropTargetBar() != null) {
             mLauncher.getDropTargetBar().onDragEnd();
         }
-        setCurrentDropLayout(null);
-        setCurrentDragOverlappingLayout(null);
         TestEventEmitter.sendEvent(TestEvent.WORKSPACE_ON_DROP);
     }
 

@@ -1610,7 +1610,7 @@ public class Launcher extends StatefulActivity<LauncherState>
                 AbstractFloatingView.closeAllOpenViewsExcept(this, isStarted(), excludedViews);
 
 
-                if (!isInState(NORMAL) && (mDragController == null || !mDragController.isDragging())) {
+                if (!isInState(NORMAL)) {
                     // Only change state, if not already the same. This prevents cancelling any
                     // animations running as part of resume
                     boolean animate = mStateManager.shouldAnimateStateChange();

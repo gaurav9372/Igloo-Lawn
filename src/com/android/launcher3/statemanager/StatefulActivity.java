@@ -116,7 +116,7 @@ public abstract class StatefulActivity<STATE_TYPE extends BaseState<STATE_TYPE>>
         final int origDragLayerChildCount = dragLayer.getChildCount();
         super.onStop();
 
-        if (!isChangingConfigurations() && (getDragController() == null || !getDragController().isDragging())) {
+        if (!isChangingConfigurations()) {
             getStateManager().moveToRestState();
         }
 
