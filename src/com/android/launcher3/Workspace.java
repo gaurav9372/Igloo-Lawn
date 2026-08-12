@@ -2430,8 +2430,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     mLauncher.getDragLayer().animateViewIntoPosition(d.dragView, cell, duration,
                             this);
                 }
-            } else {
-                d.deferDragViewCleanupPostAnimation = false;
+            }
+            if (cell != null) {
                 cell.setVisibility(VISIBLE);
             }
             parent.onDropChild(cell);

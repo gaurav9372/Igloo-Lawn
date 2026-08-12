@@ -227,6 +227,7 @@ public class AppWidgetResizeFrame extends AbstractFloatingView implements View.O
         if (widget.getParent() == null) {
             return;
         }
+        widget.setVisibility(VISIBLE);
         Launcher launcher = Launcher.getLauncher(cellLayout.getContext());
         AbstractFloatingView.closeAllOpenViews(launcher);
 

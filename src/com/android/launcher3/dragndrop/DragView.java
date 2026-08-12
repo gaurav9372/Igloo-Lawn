@@ -515,7 +515,7 @@ public abstract class DragView<T extends Context & ActivityContext> extends Fram
             addViewInLayout(view, indexOfChild(mContent), mContent.getLayoutParams(), true);
 
             removeViewInLayout(mContent);
-            mContent.setVisibility(INVISIBLE);
+            mContent.setVisibility(VISIBLE);
             mContent.setLayoutParams(mContentViewLayoutParams);
             if (reattachToPreviousParent) {
                 mContentViewParent.addView(mContent, mContentViewInParentViewIndex);
