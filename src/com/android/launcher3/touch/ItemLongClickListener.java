@@ -75,6 +75,9 @@ public class ItemLongClickListener {
             return false;
         }
         if (!(v.getTag() instanceof ItemInfo)) return false;
+        if (v instanceof LauncherAppWidgetHostView hostView) {
+            if (hostView.getAppWidgetInfo() == null) return false;
+        }
 
         launcher.setWaitingForResult(null);
         beginDrag(v, launcher, (ItemInfo) v.getTag(), new DragOptions());

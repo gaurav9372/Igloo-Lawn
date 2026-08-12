@@ -112,8 +112,12 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
         } else {
             try {
                 super.setColorResources(colors);
-            } catch (Exception e) {
-                android.util.Log.w("LauncherAppWidgetHostView", "Failed to apply color resources to widget", e);
+            } catch (Throwable t) {
+                Log.w(TAG, "Failed to apply color resources to widget, falling back to default colors", t);
+                try {
+                    resetColorResources();
+                } catch (Throwable ignored) {
+                }
             }
         }
     }
