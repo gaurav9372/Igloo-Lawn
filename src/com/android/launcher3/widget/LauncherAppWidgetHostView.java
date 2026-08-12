@@ -20,6 +20,7 @@ import static com.android.launcher3.Utilities.ATLEAST_Q;
 
 import android.appwidget.AppWidgetProviderInfo;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Parcelable;
@@ -105,23 +106,21 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
         }
     }
 
-    private static boolean sColorResourcesSupported = true;
-
     @Override
     public void setColorResources(@Nullable SparseIntArray colors) {
-        if (colors == null || colors.size() == 0 || !sColorResourcesSupported) {
+        if (colors == null || colors.size() == 0) {
+            resetColorResources();
+            return;
+        }
+        if (com.android.launcher3.Utilities.ATLEAST_S
+                && (getContext().getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
             resetColorResources();
             return;
         }
         try {
             super.setColorResources(colors);
         } catch (Throwable t) {
-            sColorResourcesSupported = false;
-            Log.w(TAG, "Color resources overlay not supported on non-system target, falling back to default widget colors");
-            try {
-                resetColorResources();
-            } catch (Throwable ignored) {
-            }
+            resetColorResources();
         }
     }
 
@@ -411,7 +410,10 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
 
     @Override
     public void onColorsChanged(SparseIntArray colors) {
-        if (!sColorResourcesSupported) return;
+        if (com.android.launcher3.Utilities.ATLEAST_S
+                && (getContext().getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+            return;
+        }
         post(() -> setColorResources(colors));
     }
 
