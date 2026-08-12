@@ -105,19 +105,22 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
         }
     }
 
+    private static boolean sColorResourcesSupported = true;
+
     @Override
     public void setColorResources(@Nullable SparseIntArray colors) {
-        if (colors == null) {
+        if (colors == null || colors.size() == 0 || !sColorResourcesSupported) {
             resetColorResources();
-        } else {
+            return;
+        }
+        try {
+            super.setColorResources(colors);
+        } catch (Throwable t) {
+            sColorResourcesSupported = false;
+            Log.w(TAG, "Color resources overlay not supported on non-system target, falling back to default widget colors");
             try {
-                super.setColorResources(colors);
-            } catch (Throwable t) {
-                Log.w(TAG, "Failed to apply color resources to widget, falling back to default colors", t);
-                try {
-                    resetColorResources();
-                } catch (Throwable ignored) {
-                }
+                resetColorResources();
+            } catch (Throwable ignored) {
             }
         }
     }
@@ -408,6 +411,7 @@ public class LauncherAppWidgetHostView extends BaseLauncherAppWidgetHostView
 
     @Override
     public void onColorsChanged(SparseIntArray colors) {
+        if (!sColorResourcesSupported) return;
         post(() -> setColorResources(colors));
     }
 
