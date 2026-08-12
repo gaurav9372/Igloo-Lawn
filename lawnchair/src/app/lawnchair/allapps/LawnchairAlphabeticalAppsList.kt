@@ -192,10 +192,10 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
-        var effectiveAppList = appList
-        if (effectiveAppList.isNullOrEmpty() && appsStore != null && appsStore.getApps().isNotEmpty()) {
-            onAppsUpdated()
-            effectiveAppList = mApps
+        val effectiveAppList: List<AppInfo?>? = if (appList.isNullOrEmpty() && appsStore != null && appsStore.getApps().isNotEmpty()) {
+            appsStore.getApps().toList()
+        } else {
+            appList
         }
         if (effectiveAppList.isNullOrEmpty()) return startPosition
         val drawerListDefault = prefs.drawerList.get()
