@@ -478,7 +478,9 @@ public class StateManager<S extends BaseState<S>, T extends StatefulContainer<S>
             // The user is doing something. Lets not mess it up
             return;
         }
-        if (mActivity != null && mActivity.getDragController() != null && mActivity.getDragController().isDragging()) {
+        if (mContainer instanceof StatefulActivity<?> activity
+                && activity.getDragController() != null
+                && activity.getDragController().isDragging()) {
             // User is currently dragging an item/widget. Do not disrupt the drag.
             return;
         }
