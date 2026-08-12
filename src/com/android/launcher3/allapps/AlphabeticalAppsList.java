@@ -99,10 +99,10 @@ public class AlphabeticalAppsList<T extends Context & ActivityContext> implement
     private final T mActivityContext;
 
     // The set of apps from the system
-    private final List<AppInfo> mApps = new ArrayList<>();
+    protected final List<AppInfo> mApps = new ArrayList<>();
     private final List<AppInfo> mPrivateApps = new ArrayList<>();
     @Nullable
-    private final AllAppsStore<T> mAllAppsStore;
+    protected final AllAppsStore<T> mAllAppsStore;
 
     // The number of results in current adapter
     private int mAccessibilityResultsCount = 0;

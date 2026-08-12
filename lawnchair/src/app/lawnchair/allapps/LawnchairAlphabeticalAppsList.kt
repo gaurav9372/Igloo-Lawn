@@ -193,7 +193,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
     override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
         var effectiveAppList = appList
-        if (effectiveAppList.isNullOrEmpty() && mAppsStore != null && mAppsStore.apps.isNotEmpty()) {
+        if (effectiveAppList.isNullOrEmpty() && appsStore != null && appsStore.getApps().isNotEmpty()) {
             onAppsUpdated()
             effectiveAppList = mApps
         }
@@ -408,7 +408,7 @@ class LawnchairAlphabeticalAppsList<T>(
             val processedDefaultFolderIds = mutableSetOf<Int>()
             val processedDefaultAppKeys = mutableSetOf<String>()
 
-            appList.forEach { app ->
+            effectiveAppList?.forEach { app ->
                 if (app != null) {
                     val appKey = app.toComponentKey().toString()
                     if (!processedDefaultAppKeys.contains(appKey)) {
