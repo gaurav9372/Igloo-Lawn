@@ -16,8 +16,6 @@ android {
     productFlavors {
         lawn { dimension = "app" }
         withQuickstep { dimension = "recents" }
-        github { dimension = "channel" }
-        nightly { dimension = "channel" }
         play { dimension = "channel" }
     }
 

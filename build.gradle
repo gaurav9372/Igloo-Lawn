@@ -265,16 +265,6 @@ android {
             minSdk = 26
         }
 
-        github {
-            applicationId 'app.lawnchair'
-            dimension "channel"
-        }
-
-        nightly {
-            applicationId 'app.lawnchair.nightly'
-            dimension "channel"
-        }
-
         play {
             applicationId "app.lawnchair.play"
             dimension "channel"
@@ -312,23 +302,6 @@ android {
             proto {
                 srcDirs = ['lawnchair/protos/']
             }
-        }
-
-        github {
-            manifest.srcFile "github/AndroidManifest.xml"
-        }
-
-        nightly {
-            manifest.srcFile "nightly/AndroidManifest.xml"
-            res.srcDirs = ["nightly/res"]
-        }
-
-        lawnWithQuickstepGithub {
-            manifest.srcFile "quickstep/AndroidManifest-launcher.xml"
-        }
-
-        lawnWithQuickstepNightly {
-            manifest.srcFile "quickstep/AndroidManifest-launcher.xml"
         }
 
         lawnWithQuickstepPlay {
