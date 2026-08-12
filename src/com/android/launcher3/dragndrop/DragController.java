@@ -363,7 +363,7 @@ public abstract class DragController<T extends ActivityContext>
     /**
      * This only gets called as a result of drag view cleanup being deferred in endDrag();
      */
-    void onDeferredEndDrag(DragView dragView) {
+    public void onDeferredEndDrag(DragView dragView) {
         dragView.remove();
 
         if (mDragObject.deferDragViewCleanupPostAnimation) {
