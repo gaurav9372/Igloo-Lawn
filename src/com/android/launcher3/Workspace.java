@@ -2458,6 +2458,11 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (d.stateAnnouncer != null && !droppedOnOriginalCell) {
             d.stateAnnouncer.completeAction(R.string.item_moved);
         }
+        if (mLauncher.getDropTargetBar() != null) {
+            mLauncher.getDropTargetBar().onDragEnd();
+        }
+        setCurrentDropLayout(null);
+        setCurrentDragOverlappingLayout(null);
         TestEventEmitter.sendEvent(TestEvent.WORKSPACE_ON_DROP);
     }
 
@@ -3176,7 +3181,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         layout.layout(0, 0, unScaledSize[0], unScaledSize[1]);
         Bitmap b = BitmapRenderer.createHardwareBitmap(
                 unScaledSize[0], unScaledSize[1], layout::draw);
-        layout.setVisibility(visibility);
+        layout.setVisibility(VISIBLE);
         return new FastBitmapDrawable(b);
     }
 
