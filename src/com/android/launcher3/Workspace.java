@@ -2543,9 +2543,11 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             mAddToExistingFolderOnDrop = true;
         }
 
-        // Reset the previous drag target
-        setCurrentDropLayout(null);
-        setCurrentDragOverlappingLayout(null);
+        // Reset the previous drag target if drag was exited without dropping
+        if (!d.dragComplete) {
+            setCurrentDropLayout(null);
+            setCurrentDragOverlappingLayout(null);
+        }
 
         mSpringLoadedDragController.cancel();
     }
@@ -3108,6 +3110,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             if (isWidget && ((PendingAddWidgetInfo) pendingInfo).info != null &&
                     ((PendingAddWidgetInfo) pendingInfo).getHandler().needsConfigure()) {
                 animationStyle = ANIMATE_INTO_POSITION_AND_REMAIN;
+            }
+            if (!mLauncher.isInState(EDIT_MODE)) {
+                mLauncher.getStateManager().goToState(NORMAL, SPRING_LOADED_EXIT_DELAY);
             }
             animateWidgetDrop(info, cellLayout, d.dragView, onAnimationCompleteRunnable,
                     animationStyle, finalView, true);
