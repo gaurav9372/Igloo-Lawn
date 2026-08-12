@@ -3111,9 +3111,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     ((PendingAddWidgetInfo) pendingInfo).getHandler().needsConfigure()) {
                 animationStyle = ANIMATE_INTO_POSITION_AND_REMAIN;
             }
-            if (!mLauncher.isInState(EDIT_MODE)) {
-                mLauncher.getStateManager().goToState(NORMAL, SPRING_LOADED_EXIT_DELAY);
-            }
             animateWidgetDrop(info, cellLayout, d.dragView, onAnimationCompleteRunnable,
                     animationStyle, finalView, true);
         } else {
@@ -3290,6 +3287,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     if (onCompleteRunnable != null) {
                         onCompleteRunnable.run();
                     }
+                    mLauncher.getDragController().onDeferredEndDrag(dragView);
                 }
             };
             dragLayer.animateViewIntoPosition(dragView, finalPos[0],

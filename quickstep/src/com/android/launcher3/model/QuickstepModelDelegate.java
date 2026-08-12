@@ -252,8 +252,7 @@ public class QuickstepModelDelegate extends ModelDelegate {
             );
             Log.d(TAG, "Successfully registered for launcher snapshot logging!");
         } catch (Throwable e) {
-            Log.d(TAG, "Failed to register launcher snapshot logging callback with StatsManager",
-                    e);
+            Log.d(TAG, "Failed to register launcher snapshot logging callback with StatsManager: " + e.getMessage());
         }
     }
 
