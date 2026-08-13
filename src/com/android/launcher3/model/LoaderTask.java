@@ -36,15 +36,19 @@ import static com.android.launcher3.util.LooperExecutor.CALLER_LOADER_TASK;
 import static com.android.launcher3.util.PackageManagerHelper.hasShortcutsPermission;
 
 import android.appwidget.AppWidgetProviderInfo;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageInstaller.SessionInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.pm.ShortcutInfo;
+import android.text.TextUtils;
 import android.os.Bundle;
 import android.os.Trace;
 import android.os.UserHandle;
@@ -62,6 +66,7 @@ import com.android.launcher3.Flags;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherModel;
 import com.android.launcher3.LauncherPrefs;
+import com.android.launcher3.LauncherSettings;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.backuprestore.LauncherRestoreEventLogger;
 import com.android.launcher3.config.FeatureFlags;
@@ -80,6 +85,7 @@ import com.android.launcher3.model.LoaderCursor.LoaderCursorFactory;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.FolderInfo;
 import com.android.launcher3.model.data.IconRequestInfo;
+import com.android.launcher3.model.data.ItemInfoWithIcon;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
 import com.android.launcher3.model.data.LoaderParams;
@@ -615,15 +621,11 @@ public class LoaderTask implements Runnable {
         boolean isPrivateProfileQuiet = false;
         for (UserHandle user : profiles) {
             // Query for the set of apps
-            final List<LauncherActivityInfo> apps = mLauncherApps.getActivityList(null, user);
-            // Fail if we don't have any apps
-            if (apps == null || apps.isEmpty()) {
-                if (myUserHandle().equals(user)) {
-                    return allActivityList;
-                } else {
-                    continue;
-                }
-            }
+            final List<LauncherActivityInfo> appsList = mLauncherApps.getActivityList(null, user);
+            final List<LauncherActivityInfo> apps = appsList != null ? appsList : new ArrayList<>();
+            final java.util.Set<String> loadedPackages = new java.util.HashSet<>();
+            final java.util.Set<String> processedDisabledPackages = new java.util.HashSet<>();
+
             // Query UserManager directly for current quiet mode state to avoid stale cached values
             boolean quietMode = mUserManager.isQuietModeEnabled(user);
             // Update the cached state for consistency
@@ -639,6 +641,7 @@ public class LoaderTask implements Runnable {
             // Create the ApplicationInfos
             for (int i = 0; i < apps.size(); i++) {
                 LauncherActivityInfo app = apps.get(i);
+                loadedPackages.add(app.getComponentName().getPackageName());
                 AppInfo appInfo = new AppInfo(app, mUserCache.getUserInfo(user),
                         ApiWrapper.INSTANCE.get(mContext), mPmHelper, quietMode);
                 try {
@@ -667,6 +670,75 @@ public class LoaderTask implements Runnable {
                 allAppsItemRequestInfos.add(iconRequestInfo);
                 mBgAllAppsList.add(appInfo, app, false);
             }
+
+            // Also load disabled or frozen launcher apps via PackageManager query for main user only
+            if (myUserHandle().equals(user)) {
+                try {
+                    Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+                    mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                    int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS | PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+                            | PackageManager.MATCH_DIRECT_BOOT_AWARE | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
+                    PackageManager pm = mContext.getPackageManager();
+                    List<ResolveInfo> disabledAppResolves = pm.queryIntentActivities(mainIntent, pmFlags);
+                    for (ResolveInfo ri : disabledAppResolves) {
+                        if (ri.activityInfo == null || ri.activityInfo.packageName == null) continue;
+                        String pkgName = ri.activityInfo.packageName;
+
+                        // Skip if package is already loaded (enabled) or already processed
+                        if (loadedPackages.contains(pkgName) || processedDisabledPackages.contains(pkgName)) {
+                            continue;
+                        }
+
+                        // Skip system overlays, framework stubs, and internal framework packages
+                        if (pkgName.endsWith(".overlay") || pkgName.endsWith(".auto_generated_rro__")
+                                || pkgName.startsWith("com.android.internal") || pkgName.equals("android")) {
+                            continue;
+                        }
+
+                        // For system apps, only include if explicitly disabled by user (COMPONENT_ENABLED_STATE_DISABLED_USER)
+                        ApplicationInfo appInfo = ri.activityInfo.applicationInfo;
+                        boolean isSystemApp = (appInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                        int state = pm.getApplicationEnabledSetting(pkgName);
+                        if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                            continue;
+                        }
+
+                        // Must have a valid non-empty label and icon resource
+                        CharSequence label = ri.loadLabel(pm);
+                        if (label == null || TextUtils.isEmpty(label.toString().trim())
+                                || label.toString().equals(ri.activityInfo.name)) {
+                            continue;
+                        }
+                        if (ri.activityInfo.icon == 0 && appInfo.icon == 0) {
+                            continue;
+                        }
+
+                        ComponentName cn = new ComponentName(pkgName, ri.activityInfo.name);
+                        AppInfo disabledAppInfo = new AppInfo();
+                        disabledAppInfo.componentName = cn;
+                        disabledAppInfo.container = LauncherSettings.Favorites.CONTAINER_ALL_APPS;
+                        disabledAppInfo.user = user;
+                        disabledAppInfo.intent = AppInfo.makeLaunchIntent(cn);
+                        disabledAppInfo.title = label.toString().trim();
+                        disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        if (quietMode) {
+                            disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_QUIET_USER;
+                        }
+                        disabledAppInfo.uid = ri.activityInfo.applicationInfo.uid;
+
+                        IconRequestInfo<AppInfo> iconRequestInfo = new IconRequestInfo<>(
+                                disabledAppInfo,
+                                /* launcherActivityInfo= */ null,
+                                disabledAppInfo.getMatchingLookupFlag().withThemeIcon(false));
+                        allAppsItemRequestInfos.add(iconRequestInfo);
+                        mBgAllAppsList.add(disabledAppInfo, null, false);
+                        processedDisabledPackages.add(pkgName);
+                    }
+                } catch (Throwable t) {
+                    Log.w(TAG, "Failed to load disabled/frozen apps via PackageManager", t);
+                }
+            }
+
             allActivityList.addAll(apps);
         }
 

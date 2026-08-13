@@ -25,8 +25,11 @@ import static com.android.launcher3.model.data.AppInfo.EMPTY_ARRAY;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.LocaleList;
 import android.os.UserHandle;
 import android.text.TextUtils;
@@ -172,9 +175,9 @@ public class AllAppsList {
             info.sectionName = mIndex.computeSectionName(info.title == null ? "" : info.title);
         } else {
             try {
-                info.title = activityInfo != null ? activityInfo.getLabel() : "";
+                info.title = activityInfo != null ? activityInfo.getLabel() : (info.title != null ? info.title : "");
             } catch (Throwable t) {
-                info.title = "";
+                info.title = info.title != null ? info.title : "";
             }
             info.sectionName = mIndex.computeSectionName(info.title == null ? "" : info.title);
         }
@@ -377,22 +380,84 @@ public class AllAppsList {
                     applicationInfo.intent = launchIntent;
                     AppInfo.updateRuntimeFlagsForActivityTarget(applicationInfo, info,
                             userCache.getUserInfo(user), apiWrapper, pmHelper);
+                    // Clear disabled flags as app is enabled
+                    applicationInfo.runtimeStatusFlags &= ~com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                    applicationInfo.runtimeStatusFlags &= ~com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_NOT_AVAILABLE;
                     mDataChanged = true;
                 }
             }
         } else {
-            // Remove all data for this package.
-            if (DEBUG) {
-                Log.w(TAG, "updatePackage: no Activities matched updated package,"
-                        + " removing any AppInfo with package=" + packageName
-                        + ", user=" + user);
-            }
-            for (int i = data.size() - 1; i >= 0; i--) {
-                final AppInfo applicationInfo = data.get(i);
-                if (user.equals(applicationInfo.user)
-                        && packageName.equals(applicationInfo.componentName.getPackageName())) {
-                    mIconCache.remove(applicationInfo.componentName, user);
-                    removeApp(i);
+            // Check if package is still installed on the device (disabled or frozen by Hail, Greenify, etc.)
+            if (new ApplicationInfoWrapper(context, packageName, user).isInstalled()) {
+                if (DEBUG) {
+                    Log.d(TAG, "updatePackage: app disabled/frozen, keeping AppInfo with package="
+                            + packageName + ", user=" + user);
+                }
+                boolean foundAny = false;
+                for (int i = data.size() - 1; i >= 0; i--) {
+                    final AppInfo applicationInfo = data.get(i);
+                    if (user.equals(applicationInfo.user)
+                            && packageName.equals(applicationInfo.componentName.getPackageName())) {
+                        applicationInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        mIconCache.getTitleAndIcon(applicationInfo, DEFAULT_LOOKUP_FLAG);
+                        foundAny = true;
+                        mDataChanged = true;
+                    }
+                }
+                if (!foundAny) {
+                    Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+                    mainIntent.setPackage(packageName);
+                    mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                    int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS | PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS;
+                    List<ResolveInfo> resolves = context.getPackageManager().queryIntentActivities(mainIntent, pmFlags);
+                    if (!resolves.isEmpty()) {
+                        ResolveInfo ri = null;
+                        for (ResolveInfo r : resolves) {
+                            if (r.activityInfo == null) continue;
+                            ApplicationInfo appInfo = r.activityInfo.applicationInfo;
+                            boolean isSystemApp = (appInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                            int state = context.getPackageManager().getApplicationEnabledSetting(packageName);
+                            if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                                continue;
+                            }
+                            CharSequence label = r.loadLabel(context.getPackageManager());
+                            if (label == null || TextUtils.isEmpty(label.toString().trim())
+                                    || label.toString().equals(r.activityInfo.name)) {
+                                continue;
+                            }
+                            if (r.activityInfo.icon == 0 && appInfo.icon == 0) {
+                                continue;
+                            }
+                            ri = r;
+                            break;
+                        }
+                        if (ri != null && ri.activityInfo != null) {
+                            ComponentName cn = new ComponentName(ri.activityInfo.packageName, ri.activityInfo.name);
+                            AppInfo disabledAppInfo = new AppInfo();
+                            disabledAppInfo.componentName = cn;
+                            disabledAppInfo.container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
+                            disabledAppInfo.user = user;
+                            disabledAppInfo.intent = AppInfo.makeLaunchIntent(cn);
+                            disabledAppInfo.title = ri.loadLabel(context.getPackageManager()).toString().trim();
+                            disabledAppInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                            disabledAppInfo.uid = ri.activityInfo.applicationInfo.uid;
+                            add(disabledAppInfo, null, true);
+                        }
+                    }
+                }
+            } else {
+                // Remove all data for this package as it was uninstalled.
+                if (DEBUG) {
+                    Log.w(TAG, "updatePackage: package uninstalled, removing any AppInfo with package="
+                            + packageName + ", user=" + user);
+                }
+                for (int i = data.size() - 1; i >= 0; i--) {
+                    final AppInfo applicationInfo = data.get(i);
+                    if (user.equals(applicationInfo.user)
+                            && packageName.equals(applicationInfo.componentName.getPackageName())) {
+                        mIconCache.remove(applicationInfo.componentName, user);
+                        removeApp(i);
+                    }
                 }
             }
         }

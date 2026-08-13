@@ -88,6 +88,11 @@ data object BackupAndRestore : PreferenceRootRoute, PreferenceDeepLink {
 }
 
 @Serializable
+data object Report : PreferenceRootRoute, PreferenceDeepLink {
+    override val deepLink = "$URI/report"
+}
+
+@Serializable
 data object Gestures : PreferenceRootRoute, PreferenceDeepLink {
     override val deepLink = "$URI/gestures"
 }

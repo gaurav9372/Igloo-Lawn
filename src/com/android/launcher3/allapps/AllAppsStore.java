@@ -153,6 +153,16 @@ public class AllAppsStore<T extends Context & ActivityContext> {
      */
     @Nullable
     public AppInfo getApp(ComponentKey key, Comparator<AppInfo> comparator) {
+        if (comparator == AppInfo.PACKAGE_KEY_COMPARATOR) {
+            for (AppInfo app : mApps) {
+                if (app != null && key.user.equals(app.user)
+                        && key.componentName != null && app.componentName != null
+                        && key.componentName.getPackageName().equals(app.componentName.getPackageName())) {
+                    return app;
+                }
+            }
+            return null;
+        }
         mTempInfo.componentName = key.componentName;
         mTempInfo.user = key.user;
         int index = Arrays.binarySearch(mApps, mTempInfo, comparator);

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.TipsAndUpdates
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -44,9 +45,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +80,7 @@ import app.lawnchair.ui.preferences.data.liveinfo.SyncLiveInformation
 import app.lawnchair.ui.preferences.navigation.About
 import app.lawnchair.ui.preferences.navigation.AppDrawer
 import app.lawnchair.ui.preferences.navigation.BackupAndRestore
+import app.lawnchair.ui.preferences.navigation.Report
 import app.lawnchair.ui.preferences.navigation.DebugMenu
 import app.lawnchair.ui.preferences.navigation.Dock
 import app.lawnchair.ui.preferences.navigation.ExperimentalFeatures
@@ -227,6 +233,58 @@ fun PreferencesDashboard(
                 onNavigate = { onNavigate(BackupAndRestore) },
                 isSelected = currentRoute is BackupAndRestore,
             )
+
+            PreferenceCategory(
+                label = stringResource(R.string.report_label),
+                description = stringResource(R.string.report_description),
+                iconResource = R.drawable.ic_general,
+                onNavigate = { onNavigate(Report) },
+                isSelected = currentRoute is Report,
+            )
+
+            val context = LocalContext.current
+            var showRestartDialog by remember { mutableStateOf(false) }
+            val startTimeFormatted = remember {
+                val formatter = java.time.format.DateTimeFormatter.ofPattern("dd MMM, yyyy | hh:mm:ss a", java.util.Locale.ENGLISH)
+                java.time.Instant.ofEpochMilli(LawnchairApp.startTimeMillis)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(formatter)
+            }
+            PreferenceCategory(
+                label = stringResource(R.string.debug_restart_launcher),
+                description = startTimeFormatted,
+                iconResource = R.drawable.ic_recent,
+                onNavigate = { showRestartDialog = true },
+            )
+
+            if (showRestartDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRestartDialog = false },
+                    title = {
+                        Text(text = stringResource(id = R.string.debug_restart_launcher))
+                    },
+                    text = {
+                        Text(text = "Are you sure you want to restart Lawnchair?")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showRestartDialog = false
+                                restartLauncher(context)
+                            },
+                        ) {
+                            Text(text = stringResource(id = android.R.string.ok))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showRestartDialog = false },
+                        ) {
+                            Text(text = stringResource(id = android.R.string.cancel))
+                        }
+                    },
+                )
+            }
 
             PreferenceCategory(
                 label = stringResource(R.string.about_label),

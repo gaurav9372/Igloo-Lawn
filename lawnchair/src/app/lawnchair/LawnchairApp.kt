@@ -70,6 +70,7 @@ class LawnchairApp : LauncherApplication() {
         QuickStepContract.sRecentsDisabled = !recentsEnabled
         Flowerpot.Manager.getInstance(this)
         registerActivityLifecycleCallbacks(activityHandler)
+        app.lawnchair.report.LawnchairReportRepository.onLauncherRestarted(this)
     }
 
     fun hideClockInStatusBar() {
@@ -276,6 +277,8 @@ class LawnchairApp : LauncherApplication() {
                 )
             }
         }
+
+        val startTimeMillis: Long = System.currentTimeMillis()
 
         fun getUriForFile(context: Context, file: File): Uri {
             return FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.fileprovider", file)

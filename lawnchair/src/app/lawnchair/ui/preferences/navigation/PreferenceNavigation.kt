@@ -30,6 +30,7 @@ import app.lawnchair.ui.preferences.destinations.AppDrawerFoldersPreference
 import app.lawnchair.ui.preferences.destinations.AppDrawerPreferences
 import app.lawnchair.ui.preferences.destinations.CategoryDetailPreference
 import app.lawnchair.ui.preferences.destinations.BackupAndRestorePreference
+import app.lawnchair.ui.preferences.destinations.ReportPreference
 import app.lawnchair.ui.preferences.destinations.CustomIconShapePreference
 import app.lawnchair.ui.preferences.destinations.DebugMenuPreferences
 import app.lawnchair.ui.preferences.destinations.DockPreferences
@@ -209,6 +210,9 @@ fun PreferenceNavigation(
         composable<BackupAndRestore>(
             deepLinks = getDeepLink(BackupAndRestore),
         ) { BackupAndRestorePreference() }
+        composable<Report>(
+            deepLinks = getDeepLink(Report),
+        ) { ReportPreference() }
 
         composable<About>(
             deepLinks = getDeepLink(About),

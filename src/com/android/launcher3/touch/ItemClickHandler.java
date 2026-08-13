@@ -460,12 +460,22 @@ public class ItemClickHandler {
                 return;
             }
         }
-        if (v != null && launcher.supportsAdaptiveIconAnimation(v)
-                && !item.shouldUseBackgroundAnimation()) {
-            // Preload the icon to reduce latency b/w swapping the floating view with the original.
-            FloatingIconView.fetchIcon(launcher, v, item, true /* isOpening */);
+        try {
+            launcher.startActivitySafely(v, intent, item);
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to launch app", e);
+            if (item != null && item.getTargetPackage() != null) {
+                Toast.makeText(launcher, R.string.shortcut_not_available, Toast.LENGTH_SHORT).show();
+                try {
+                    Intent detailsIntent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(android.net.Uri.fromParts("package", item.getTargetPackage(), null))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    launcher.startActivity(detailsIntent);
+                } catch (Exception ex) {
+                    // ignore
+                }
+            }
         }
-        launcher.startActivitySafely(v, intent, item);
     }
 
     /**

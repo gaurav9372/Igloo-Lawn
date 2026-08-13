@@ -188,13 +188,10 @@ constructor(
                 forceReload()
             }
             UserCache.ACTION_PROFILE_ADDED,
-            UserCache.ACTION_PROFILE_REMOVED -> forceReload()
+            UserCache.ACTION_PROFILE_REMOVED,
             UserCache.ACTION_PROFILE_AVAILABLE,
             UserCache.ACTION_PROFILE_UNAVAILABLE -> {
-                // This broadcast is only available when android.os.Flags.allowPrivateProfile() is
-                // set. For Work-profile this broadcast will be sent in addition to
-                // ACTION_MANAGED_PROFILE_AVAILABLE/UNAVAILABLE. So effectively, this if block only
-                // handles the non-work profile case.
+                // Handle profile availability changes cleanly without discarding model callbacks
                 enqueueModelUpdateTask(
                     PackageUpdatedTask(PackageUpdatedTask.OP_USER_AVAILABILITY_CHANGE, user)
                 )
@@ -225,6 +222,12 @@ constructor(
     /** Rebinds all existing callbacks with already loaded model */
     fun rebindCallbacks() {
         if (hasCallbacks()) {
+            for (cb in callbacks) {
+                if (cb is Launcher && cb.dragController?.isDragging == true) {
+                    android.util.Log.d("LauncherModel", "Skipping rebindCallbacks because drag is active")
+                    return
+                }
+            }
             startLoader()
         }
     }

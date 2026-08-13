@@ -1006,6 +1006,7 @@ public class Launcher extends StatefulActivity<LauncherState>
     @Override
     protected void onStop() {
         super.onStop();
+        app.lawnchair.report.LawnchairReportRepository.INSTANCE.onLauncherStopped(this);
         if (mDeferOverlayCallbacks) {
             checkIfOverlayStillDeferred();
         } else {
@@ -1229,6 +1230,7 @@ public class Launcher extends StatefulActivity<LauncherState>
     protected void onResume() {
         TraceHelper.INSTANCE.beginSection(ON_RESUME_EVT);
         super.onResume();
+        app.lawnchair.report.LawnchairReportRepository.INSTANCE.onLauncherResumed();
 
         if (mDeferOverlayCallbacks) {
             scheduleDeferredCheck();
@@ -1246,6 +1248,7 @@ public class Launcher extends StatefulActivity<LauncherState>
         ItemInstallQueue.INSTANCE.get(this).pauseModelPush(FLAG_ACTIVITY_PAUSED);
 
         super.onPause();
+        app.lawnchair.report.LawnchairReportRepository.INSTANCE.onLauncherPaused(this);
         mDragController.cancelDrag();
         mLastTouchUpTime = -1;
         mDropTargetBar.animateToVisibility(false);
@@ -1610,7 +1613,7 @@ public class Launcher extends StatefulActivity<LauncherState>
                 AbstractFloatingView.closeAllOpenViewsExcept(this, isStarted(), excludedViews);
 
 
-                if (!isInState(NORMAL)) {
+                if (!isInState(NORMAL) && !isInState(SPRING_LOADED) && (mDragController == null || !mDragController.isDragging())) {
                     // Only change state, if not already the same. This prevents cancelling any
                     // animations running as part of resume
                     boolean animate = mStateManager.shouldAnimateStateChange();
@@ -2135,6 +2138,14 @@ public class Launcher extends StatefulActivity<LauncherState>
                 mOnDeferredActivityLaunchCallback = null;
             }
             return result;
+        }
+
+        if (item != null) {
+            String title = item.title != null ? item.title.toString() : "";
+            String pkg = item.getTargetPackage() != null ? item.getTargetPackage() : "";
+            if (!pkg.isEmpty()) {
+                app.lawnchair.report.LawnchairReportRepository.INSTANCE.onAppClicked(this, title.isEmpty() ? pkg : title, pkg);
+            }
         }
 
         RunnableList result = super.startActivitySafely(v, intent, item);

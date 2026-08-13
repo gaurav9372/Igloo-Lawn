@@ -266,14 +266,17 @@ public abstract class DragController<T extends ActivityContext>
         return mDragDriver != null;
     }
 
+    protected boolean mIsDropInProgress = false;
+
     public boolean isDragging() {
-        return mDragDriver != null || (mOptions != null && mOptions.isAccessibleDrag);
+        return mDragDriver != null || (mOptions != null && mOptions.isAccessibleDrag) || mIsDropInProgress;
     }
 
     /**
      * Stop dragging without dropping.
      */
     public void cancelDrag() {
+        mIsDropInProgress = false;
         if (isDragging()) {
             if (mLastDropTarget != null) {
                 mLastDropTarget.onDragExit(mDragObject);
@@ -281,6 +284,9 @@ public abstract class DragController<T extends ActivityContext>
             mDragObject.deferDragViewCleanupPostAnimation = false;
             mDragObject.cancelled = true;
             mDragObject.dragComplete = true;
+            if (mDragObject.originalView instanceof View v) {
+                v.setVisibility(View.VISIBLE);
+            }
             if (!mIsInPreDrag) {
                 dispatchDropComplete(null, false);
             }
@@ -350,6 +356,7 @@ public abstract class DragController<T extends ActivityContext>
     }
 
     protected void callOnDragEnd() {
+        mIsDropInProgress = false;
         if (mIsInPreDrag && mOptions.preDragCondition != null) {
             mOptions.preDragCondition.onPreDragEnd(mDragObject, false /* dragStarted*/);
         }
@@ -524,6 +531,7 @@ public abstract class DragController<T extends ActivityContext>
     }
 
     protected void drop(DropTarget dropTarget, Runnable flingAnimation) {
+        mIsDropInProgress = true;
         // Move dragging to the final target.
         if (dropTarget != mLastDropTarget) {
             if (mLastDropTarget != null) {

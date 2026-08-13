@@ -1804,8 +1804,9 @@ public class CellLayout extends ViewGroup {
         mPreviousSolution = null;
         mDragCell[0] = mDragCell[1] = -1;
         mDragCellSpan[0] = mDragCellSpan[1] = -1;
-        mDragOutlineAnims[mDragOutlineCurrent].animateOut();
-        mDragOutlineCurrent = (mDragOutlineCurrent + 1) % mDragOutlineAnims.length;
+        for (InterruptibleInOutAnimator anim : mDragOutlineAnims) {
+            anim.animateOut();
+        }
         revertTempState();
         setIsDragOverlapping(false);
     }

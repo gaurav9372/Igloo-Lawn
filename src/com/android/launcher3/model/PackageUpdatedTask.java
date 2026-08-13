@@ -167,6 +167,9 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                 break;
             case OP_REMOVE: {
                 for (int i = 0; i < packageCount; i++) {
+                    if (new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                        continue;
+                    }
                     iconCache.removeIconsForPkg(packages[i], mUser);
                     PreferenceManager pm = PreferenceManager.getInstance(context);
                     if (packages[i].equals(pm.getIconPackPackage().get())) {
@@ -193,10 +196,17 @@ public class PackageUpdatedTask implements ModelUpdateTask {
             }
             case OP_UNAVAILABLE:
                 for (int i = 0; i < packageCount; i++) {
-                    if (DEBUG) {
-                        Log.d(TAG, getOpString() + ": removing package=" + packages[i]);
+                    if (new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                        if (DEBUG) {
+                            Log.d(TAG, getOpString() + ": package disabled/frozen, updating package=" + packages[i]);
+                        }
+                        appsList.updatePackage(context, packages[i], mUser);
+                    } else {
+                        if (DEBUG) {
+                            Log.d(TAG, getOpString() + ": removing package=" + packages[i]);
+                        }
+                        appsList.removePackage(packages[i], mUser);
                     }
-                    appsList.removePackage(packages[i], mUser);
                 }
                 flagOp = FlagOp.NO_OP.addFlag(WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE);
                 break;
@@ -415,22 +425,21 @@ public class PackageUpdatedTask implements ModelUpdateTask {
 
         final HashSet<String> removedPackages = new HashSet<>();
         if (mOp == OP_REMOVE) {
-            // Mark all packages in the broadcast to be removed
-            Collections.addAll(removedPackages, packages);
-            if (DEBUG) {
-                Log.d(TAG, "OP_REMOVE: removing packages=" + Arrays.toString(packages));
-            }
-
-            // No need to update the removedComponents as
-            // removedPackages is a super-set of removedComponents
-        } else if (mOp == OP_UPDATE) {
-            // Mark disabled packages in the broadcast to be removed
-            final LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
+            // Only mark packages to be removed if they are uninstalled from the device
             for (int i = 0; i < packageCount; i++) {
-                if (!launcherApps.isPackageEnabled(packages[i], mUser)) {
+                if (!new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                    removedPackages.add(packages[i]);
+                }
+            }
+            if (DEBUG) {
+                Log.d(TAG, "OP_REMOVE: uninstalled packages=" + removedPackages);
+            }
+        } else if (mOp == OP_UPDATE) {
+            // Disabled/frozen packages are kept if still installed. Only remove if uninstalled.
+            for (int i = 0; i < packageCount; i++) {
+                if (!new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
                     if (DEBUG) {
-                        Log.d(TAG, "OP_UPDATE:"
-                                + " package " + packages[i] + " is disabled, removing package.");
+                        Log.d(TAG, "OP_UPDATE: package " + packages[i] + " is uninstalled, removing package.");
                     }
                     removedPackages.add(packages[i]);
                 }

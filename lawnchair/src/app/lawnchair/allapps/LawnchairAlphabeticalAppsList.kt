@@ -182,18 +182,28 @@ class LawnchairAlphabeticalAppsList<T>(
         .launchIn(context.launcher.lifecycleScope)
     }
 
+    private fun findAppInStore(componentKey: ComponentKey): AppInfo? {
+        val exact = appsStore.getApp(componentKey)
+        if (exact != null) return exact
+        val pkg = componentKey.componentName?.packageName ?: return null
+        val user = componentKey.user
+        return appsStore.apps?.firstOrNull { app ->
+            app != null && app.user == user && app.componentName?.packageName == pkg
+        }
+    }
+
     override fun updateItemFilter(itemFilter: Predicate<ItemInfo>?) {
         mItemFilter = Predicate { info ->
             require(info is AppInfo) { "`info` must be an instance of `AppInfo`." }
             val componentKey = info.toComponentKey().toString()
             (itemFilter?.test(info) != false) && !hiddenApps.contains(componentKey)
         }
-        onAppsUpdated()
+        updateAdapterItems()
     }
 
-    override fun addAppsWithSections(appList: List<AppInfo?>?, startPosition: Int): Int {
-        val effectiveAppList: List<AppInfo?>? = if (appList.isNullOrEmpty() && appsStore != null && appsStore.getApps().isNotEmpty()) {
-            appsStore.getApps().toList()
+    override fun addAppsWithSections(appList: List<AppInfo>?, startPosition: Int): Int {
+        val effectiveAppList = if (appList.isNullOrEmpty() && appsStore?.apps != null && appsStore.apps.isNotEmpty()) {
+            appsStore.apps.toList()
         } else {
             appList
         }
@@ -223,6 +233,17 @@ class LawnchairAlphabeticalAppsList<T>(
                 .toSet()
 
             val allUserClaimedKeys = directUserCategoryKeys + userCategoryFolderAppKeys
+            val allUserClaimedPackageUserSet = allUserClaimedKeys.mapNotNull { keyStr ->
+                val ck = ComponentKey.fromString(keyStr) ?: return@mapNotNull null
+                (ck.componentName?.packageName ?: return@mapNotNull null) to ck.user
+            }.toSet()
+
+            fun isClaimedByUserCategory(appInfo: AppInfo): Boolean {
+                val appKey = appInfo.toComponentKey().toString()
+                if (allUserClaimedKeys.contains(appKey)) return true
+                val pkg = appInfo.componentName?.packageName ?: return false
+                return allUserClaimedPackageUserSet.contains(pkg to appInfo.user)
+            }
 
             categoryList.forEach { categoryEntry ->
                 if (categoryEntry.id == -100) {
@@ -231,8 +252,7 @@ class LawnchairAlphabeticalAppsList<T>(
                         .filter { it.isNotBlank() }
 
                     val unassignedApps = validApps.filterNot { app ->
-                        val appKey = app.toComponentKey().toString()
-                        allUserClaimedKeys.contains(appKey) || globalProcessedAppKeys.contains(appKey)
+                        isClaimedByUserCategory(app) || globalProcessedAppKeys.contains(app.toComponentKey().toString())
                     }.sortedBy { app ->
                         val key = app.toComponentKey().toString()
                         val idx = unassignedOrder.indexOf(key)
@@ -312,7 +332,7 @@ class LawnchairAlphabeticalAppsList<T>(
                     val resolvedApps = fullCategoryAppKeys.mapNotNull { keyString ->
                         if (hiddenApps.contains(keyString)) return@mapNotNull null
                         val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                        appsStore.getApp(componentKey) as? AppInfo
+                        findAppInStore(componentKey)
                     }
 
                     if (resolvedApps.isNotEmpty()) {
@@ -334,7 +354,10 @@ class LawnchairAlphabeticalAppsList<T>(
                                 if (!globalProcessedAppKeys.contains(appKey)) {
                                     val targetFolder = folderList.find { folderEntry ->
                                         !globalProcessedFolderIds.contains(folderEntry.id) &&
-                                            folderEntry.itemComponentKeys.contains(appKey)
+                                            (folderEntry.itemComponentKeys.contains(appKey) ||
+                                                folderEntry.itemComponentKeys.any { key ->
+                                                    ComponentKey.fromString(key)?.componentName?.packageName == appInfo.componentName?.packageName
+                                                })
                                     }
 
                                     var folderAdded = false
@@ -342,7 +365,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                         val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
                                             if (hiddenApps.contains(keyString)) return@mapNotNull null
                                             val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                            appsStore.getApp(componentKey) as? AppInfo
+                                            findAppInStore(componentKey)
                                         }
 
                                         if (folderApps.size >= 2) {
@@ -488,7 +511,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
                 val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
                     val ck = ComponentKey.fromString(key)
-                    ck == null || appsStore.getApp(ck) == null
+                    ck == null || (appsStore.getApp(ck) == null && appsStore.getApp(ck, AppInfo.PACKAGE_KEY_COMPARATOR) == null)
                 }.filterNot { claimedKeys.contains(it) }
 
                 val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->

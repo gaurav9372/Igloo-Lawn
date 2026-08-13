@@ -2012,14 +2012,31 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         if (mLauncher != null && mLauncher.isInState(com.android.launcher3.LauncherState.ALL_APPS)) {
             return false;
         }
-        // If it's an external drop (e.g. from All Apps), check if it should be accepted
         CellLayout dropTargetLayout = mDropToLayout;
+        if (dropTargetLayout == null) {
+            dropTargetLayout = mDragTargetLayout;
+        }
+        if (dropTargetLayout == null) {
+            int currentPage = getCurrentPage();
+            if (currentPage >= 0 && currentPage < getPageCount()) {
+                dropTargetLayout = (CellLayout) getChildAt(currentPage);
+            }
+        }
+        Log.d("WorkspaceDrag", "acceptDrop: dragSource=" + d.dragSource
+                + " dragInfo=" + d.dragInfo
+                + " dropTargetLayout=" + dropTargetLayout
+                + " mDropToLayout=" + mDropToLayout
+                + " mDragTargetLayout=" + mDragTargetLayout);
         if (d.dragSource != this) {
             // Don't accept the drop if we're not over a valid drop target at time of drop
             if (dropTargetLayout == null) {
+                Log.w("WorkspaceDrag", "acceptDrop REJECTED: dropTargetLayout is null");
                 return false;
             }
-            if (!transitionStateShouldAllowDrop()) return false;
+            if (!transitionStateShouldAllowDrop()) {
+                Log.w("WorkspaceDrag", "acceptDrop REJECTED: transitionStateShouldAllowDrop is false");
+                return false;
+            }
 
             mDragViewVisualCenter = d.getVisualCenter(mDragViewVisualCenter);
 
@@ -2226,6 +2243,18 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     public void onDrop(final DragObject d, DragOptions options) {
         mDragViewVisualCenter = d.getVisualCenter(mDragViewVisualCenter);
         CellLayout dropTargetLayout = mDropToLayout;
+        if (dropTargetLayout == null) {
+            dropTargetLayout = mDragTargetLayout;
+        }
+        if (dropTargetLayout == null) {
+            int currentPage = getCurrentPage();
+            if (currentPage >= 0 && currentPage < getPageCount()) {
+                dropTargetLayout = (CellLayout) getChildAt(currentPage);
+            }
+        }
+        Log.d("WorkspaceDrag", "onDrop: dragInfo=" + d.dragInfo
+                + " dropTargetLayout=" + dropTargetLayout
+                + " cancelled=" + d.cancelled);
 
         // We want the point to be mapped to the dragTarget.
         if (dropTargetLayout != null) {
@@ -2344,6 +2373,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     }
 
                     // update the item's position after drop
+                    info.cellX = mTargetCell[0];
+                    info.cellY = mTargetCell[1];
                     CellLayoutLayoutParams lp = (CellLayoutLayoutParams) cell.getLayoutParams();
                     lp.setTmpCellX(mTargetCell[0]);
                     lp.setCellX(mTargetCell[0]);
@@ -2352,6 +2383,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     lp.cellHSpan = item.spanX;
                     lp.cellVSpan = item.spanY;
                     lp.isLockedToGrid = true;
+                    cell.setLayoutParams(lp);
+                    cell.requestLayout();
 
                     if (container != CONTAINER_HOTSEAT
                             && cell instanceof LauncherAppWidgetHostView) {
@@ -2435,6 +2468,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 cell.setVisibility(VISIBLE);
             }
             parent.onDropChild(cell);
+            setCurrentDropLayout(null);
+            setCurrentDragOverlappingLayout(null);
 
             if (!mLauncher.isInState(EDIT_MODE)) {
                 mLauncher.getStateManager().goToState(NORMAL, SPRING_LOADED_EXIT_DELAY,
@@ -2534,9 +2569,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             enforceDragParity("onDragExit", -1, 0);
         }
 
-        // Here we store the final page that will be dropped to, if the workspace in fact
-        // receives the drop
-        mDropToLayout = mDragTargetLayout;
+        if (mDragTargetLayout != null) {
+            mDropToLayout = mDragTargetLayout;
+        }
         if (mDragMode == DRAG_MODE_CREATE_FOLDER) {
             mCreateUserFolderOnDrop = true;
         } else if (mDragMode == DRAG_MODE_ADD_TO_FOLDER) {
@@ -2807,8 +2842,18 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 IntSet visiblePageIndices = getVisiblePageIndices();
                 for (int visiblePageIndex : visiblePageIndices) {
                     layout = verifyInsidePage(visiblePageIndex, d.x, d.y);
+                    if (layout == null) {
+                        layout = verifyInsidePage(visiblePageIndex, centerX, centerY);
+                    }
                     if (layout != null) break;
                 }
+            }
+        }
+
+        if (layout == null && (mLauncher.isInState(SPRING_LOADED) || mLauncher.isInState(EDIT_MODE))) {
+            int currentPage = getCurrentPage();
+            if (currentPage >= 0 && currentPage < getPageCount()) {
+                layout = (CellLayout) getChildAt(currentPage);
             }
         }
 
@@ -3014,8 +3059,22 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
      * NOTE: This can also be called when we are outside of a drag event, when we want
      * to add an item to one of the workspace screens.
      */
-    private void onDropExternal(final int[] touchXY, final CellLayout cellLayout, DragObject d) {
-        final int container = mLauncher.isHotseatLayout(cellLayout)
+    private void onDropExternal(final int[] touchXY, CellLayout cellLayout, DragObject d) {
+        if (cellLayout == null) {
+            cellLayout = mDragTargetLayout;
+        }
+        if (cellLayout == null && mDropToLayout != null) {
+            cellLayout = mDropToLayout;
+        }
+        if (cellLayout == null) {
+            int currentPage = getCurrentPage();
+            if (currentPage >= 0 && currentPage < getPageCount()) {
+                cellLayout = (CellLayout) getChildAt(currentPage);
+            }
+        }
+        if (cellLayout == null) return;
+        final CellLayout targetLayout = cellLayout;
+        final int container = mLauncher.isHotseatLayout(targetLayout)
                 ? CONTAINER_HOTSEAT
                 : CONTAINER_DESKTOP;
         if (d.dragInfo instanceof PendingAddShortcutInfo) {
@@ -3166,6 +3225,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             }
             mStatsLogManager.logger().withItemInfo(d.dragInfo).withInstanceId(d.logInstanceId)
                     .log(LauncherEvent.LAUNCHER_ITEM_DROP_COMPLETED);
+            setCurrentDropLayout(null);
+            setCurrentDragOverlappingLayout(null);
         }
 
     }

@@ -49,9 +49,8 @@ class ApplicationInfoWrapper(provider: () -> ApplicationInfo?) {
                 ?.let { ai ->
                     // its enabled and (either installed or archived)
                     if (
-                        ai.enabled &&
-                            (ai.flags.and(FLAG_INSTALLED) != 0 ||
-                                (ATLEAST_V && enableSupportForArchiving() && ai.isArchived))
+                        (ai.flags.and(FLAG_INSTALLED) != 0 ||
+                            (ATLEAST_V && enableSupportForArchiving() && ai.isArchived))
                     ) {
                         ai
                     } else {

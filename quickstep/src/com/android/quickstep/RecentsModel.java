@@ -346,8 +346,9 @@ public class RecentsModel implements RecentTasksDataSource, TaskStackChangeListe
         if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
             mThumbnailCache.getHighResLoadingState().setVisible(false);
         }
-        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
-            // Clear everything once we reach a low-mem situation
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+                || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            // Clear thumbnail and icon caches when backgrounded to prevent Low Memory Killer (LMK) from killing Launcher
             mThumbnailCache.clear();
             mIconCache.clearCache();
         }

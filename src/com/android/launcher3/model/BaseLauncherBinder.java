@@ -89,6 +89,14 @@ public class BaseLauncherBinder {
     public void bindWorkspace(boolean incrementBindId, boolean isBindSync) {
         Trace.beginSection("BaseLauncherBinder#bindWorkspace");
         try {
+            for (Callbacks cb : mCallbacksList) {
+                if (cb instanceof com.android.launcher3.Launcher launcher) {
+                    if (launcher.getDragController() != null && launcher.getDragController().isDragging()) {
+                        android.util.Log.d("BaseLauncherBinder", "Deferring workspace bind because drag is active");
+                        return;
+                    }
+                }
+            }
             // Save a copy of all the bg-thread collections
             WorkspaceData itemsIdMap;
             ArrayList<FixedContainerItems> extraItems = new ArrayList<>();

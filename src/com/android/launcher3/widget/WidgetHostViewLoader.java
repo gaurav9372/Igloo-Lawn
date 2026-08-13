@@ -62,13 +62,15 @@ public class WidgetHostViewLoader implements DragController.DragListener {
             mWidgetLoadingId = -1;
         }
 
-        // The widget was inflated and added to the DragLayer -- remove it.
+        // The widget was inflated and added to the DragLayer -- remove it if not placed on workspace.
         if (mInfo.boundWidget != null) {
-            if (LOGD) {
-                Log.d(TAG, "...removing widget from drag layer");
+            if (mInfo.boundWidget.getParent() == mLauncher.getDragLayer()) {
+                if (LOGD) {
+                    Log.d(TAG, "...removing un-placed widget from drag layer");
+                }
+                mLauncher.getDragLayer().removeView(mInfo.boundWidget);
+                mLauncher.getAppWidgetHolder().deleteAppWidgetId(mInfo.boundWidget.getAppWidgetId());
             }
-            mLauncher.getDragLayer().removeView(mInfo.boundWidget);
-            mLauncher.getAppWidgetHolder().deleteAppWidgetId(mInfo.boundWidget.getAppWidgetId());
             mInfo.boundWidget = null;
         }
     }
