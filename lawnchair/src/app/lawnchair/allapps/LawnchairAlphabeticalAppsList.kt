@@ -486,30 +486,39 @@ class LawnchairAlphabeticalAppsList<T>(
             }
         }
 
+        // Rendered assignments take precedence over saved membership regardless of category
+        // order. This matters when an item is dropped into a collapsed category: its new row is
+        // rendered, while all of that category's existing rows intentionally are not.
+        val renderedAssignedKeys = categoryKeyMap.values.flatten().toSet()
         val claimedKeys = mutableSetOf<String>()
 
         val updatedList = categoryList.map { categoryEntry ->
             val categoryIdStr = categoryEntry.id.toString()
             val keysForThisCatFromAdapter = (categoryKeyMap[categoryIdStr] ?: emptyList())
                 .filterNot { claimedKeys.contains(it) }
+            val preservedKeys = categoryEntry.itemComponentKeys.filterNot { key ->
+                renderedAssignedKeys.contains(key) || claimedKeys.contains(key)
+            }
 
             val isCollapsed = categoriesAsAccordions && collapsedCategories.contains(categoryIdStr)
             val wasRendered = renderedCategoryIds.contains(categoryIdStr)
             val finalKeys = if (categoryIdStr == NO_CATEGORY_ID) {
                 keysForThisCatFromAdapter.distinct()
             } else if (wasRendered && !isCollapsed) {
-                val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                val uninstalledCategoryApps = preservedKeys.filter { key ->
                     val ck = ComponentKey.fromString(key)
                     ck == null || (appsStore.getApp(ck) == null && appsStore.getApp(ck, AppInfo.PACKAGE_KEY_COMPARATOR) == null)
-                }.filterNot { claimedKeys.contains(it) }
+                }
 
-                val hiddenCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
+                val hiddenCategoryApps = preservedKeys.filter { key ->
                     hiddenApps.contains(key)
-                }.filterNot { claimedKeys.contains(it) }
+                }
 
                 (keysForThisCatFromAdapter + uninstalledCategoryApps + hiddenCategoryApps).distinct()
+            } else if (wasRendered && isCollapsed) {
+                (keysForThisCatFromAdapter + preservedKeys).distinct()
             } else {
-                categoryEntry.itemComponentKeys.filterNot { claimedKeys.contains(it) }
+                preservedKeys
             }
             claimedKeys.addAll(finalKeys)
 

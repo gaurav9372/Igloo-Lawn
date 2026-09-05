@@ -173,23 +173,11 @@ class AllAppsCategoryTouchHelperCallback(
                 return false
             }
 
-            val targetCatId = if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                if (fromPos > toPos) {
-                    // Enter the rendered category immediately above this header. Category IDs
-                    // remain unambiguous when two categories have the same title.
-                    items.subList(0, toPos).asReversed().firstOrNull {
-                        it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER
-                    }?.categoryId ?: toItem.categoryId ?: NO_CATEGORY_ID
-                } else {
-                    toItem.categoryId ?: NO_CATEGORY_ID
-                }
-            } else {
-                toItem.categoryId ?: NO_CATEGORY_ID
-            }
-
-            if (!targetCatId.isNullOrEmpty()) {
-                fromItem.categoryId = targetCatId
-            }
+            // A category header is itself a drop target. Resolving an upward drop to the
+            // preceding header sends items past collapsed categories because they have no
+            // rendered children to target instead.
+            val targetCatId = toItem.categoryId ?: NO_CATEGORY_ID
+            fromItem.categoryId = targetCatId
 
             try {
                 if (fromPos in items.indices && toPos in items.indices) {
