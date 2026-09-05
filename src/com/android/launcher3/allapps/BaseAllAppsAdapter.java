@@ -17,6 +17,7 @@ package com.android.launcher3.allapps;
 
 import static android.view.View.GONE;
 
+import static com.android.app.animation.Interpolators.EMPHASIZED_DECELERATE;
 import static com.android.launcher3.allapps.SectionDecorationInfo.ROUND_BOTTOM_LEFT;
 import static com.android.launcher3.allapps.SectionDecorationInfo.ROUND_BOTTOM_RIGHT;
 import static com.android.launcher3.allapps.SectionDecorationInfo.ROUND_NOTHING;
@@ -63,6 +64,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         RecyclerView.Adapter<BaseAllAppsAdapter.ViewHolder> {
 
     public static final String TAG = "BaseAllAppsAdapter";
+
+    private static final long CATEGORY_ARROW_ANIMATION_DURATION_MS = 220L;
 
     // A normal icon
     public static final int VIEW_TYPE_ICON = 1 << 1;
@@ -187,6 +190,20 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         && java.util.Objects.equals(itemInfo.user, other.itemInfo.user)
                         && java.util.Objects.equals(categoryId, other.categoryId);
             }
+            if (viewType == VIEW_TYPE_FOLDER) {
+                if (folderInfo == null || other.folderInfo == null) {
+                    return false;
+                }
+                if (folderInfo.id != ItemInfo.NO_ID || other.folderInfo.id != ItemInfo.NO_ID) {
+                    return folderInfo.id == other.folderInfo.id;
+                }
+                return java.util.Objects.equals(folderInfo.title, other.folderInfo.title);
+            }
+            if (viewType == VIEW_TYPE_CATEGORY_HEADER) {
+                return categoryId != null || other.categoryId != null
+                        ? java.util.Objects.equals(categoryId, other.categoryId)
+                        : java.util.Objects.equals(sectionTitle, other.sectionTitle);
+            }
             return true;
         }
 
@@ -200,8 +217,13 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
             // Rebind data-bearing rows: reference equality or folder size/title cannot
             // detect icon updates or replacement of a folder child. In particular, every
             // row has a default FolderInfo, which must never stand in for app contents.
-            if (viewType == VIEW_TYPE_ICON || viewType == VIEW_TYPE_FOLDER
-                    || viewType == VIEW_TYPE_CATEGORY_HEADER) {
+            if (viewType == VIEW_TYPE_CATEGORY_HEADER) {
+                return java.util.Objects.equals(sectionTitle, other.sectionTitle)
+                        && categoryAppCount == other.categoryAppCount
+                        && isAccordion == other.isAccordion
+                        && isCollapsed == other.isCollapsed;
+            }
+            if (viewType == VIEW_TYPE_ICON || viewType == VIEW_TYPE_FOLDER) {
                 return false;
             }
             return itemInfo == null && other.itemInfo == null;
@@ -524,11 +546,26 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                     }
                 }
                 if (ivArrow != null) {
+                    ivArrow.animate().cancel();
                     if (item.isAccordion) {
+                        float targetRotation = item.isCollapsed ? -90f : 0f;
+                        Object previousCategoryId = ivArrow.getTag(R.id.item_category_id);
                         ivArrow.setVisibility(View.VISIBLE);
-                        ivArrow.setRotation(item.isCollapsed ? -90f : 0f);
+                        if (ivArrow.isLaidOut()
+                                && java.util.Objects.equals(previousCategoryId, item.categoryId)
+                                && ivArrow.getRotation() != targetRotation) {
+                            ivArrow.animate()
+                                    .rotation(targetRotation)
+                                    .setDuration(CATEGORY_ARROW_ANIMATION_DURATION_MS)
+                                    .setInterpolator(EMPHASIZED_DECELERATE)
+                                    .start();
+                        } else {
+                            ivArrow.setRotation(targetRotation);
+                        }
+                        ivArrow.setTag(R.id.item_category_id, item.categoryId);
                     } else {
                         ivArrow.setVisibility(View.GONE);
+                        ivArrow.setTag(R.id.item_category_id, null);
                     }
                 }
                 if (item.isAccordion && item.categoryId != null) {

@@ -63,6 +63,7 @@ class LawnchairAlphabeticalAppsList<T>(
     private var folderList = mutableListOf<FolderEntry>()
     var categoryList = mutableListOf<CategoryEntry>()
     private var collapsedCategories: Set<String> = setOf()
+    private var pendingCollapsedCategoriesWrite: Set<String>? = null
     private val filteredList = mutableListOf<AppInfo>()
     var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
 
@@ -74,6 +75,7 @@ class LawnchairAlphabeticalAppsList<T>(
             updated.add(categoryId)
         }
         collapsedCategories = updated
+        pendingCollapsedCategoriesWrite = updated
         context.launcher.lifecycleScope.launch {
             prefs2.collapsedCategories.set(updated)
         }
@@ -103,8 +105,16 @@ class LawnchairAlphabeticalAppsList<T>(
         }
         try {
             prefs2.collapsedCategories.onEach(launchIn = context.launcher.lifecycleScope) {
-                collapsedCategories = it
-                updateAdapterItems()
+                val pendingWrite = pendingCollapsedCategoriesWrite
+                if (pendingWrite == null || pendingWrite == it) {
+                    if (pendingWrite == it) {
+                        pendingCollapsedCategoriesWrite = null
+                    }
+                    if (collapsedCategories != it) {
+                        collapsedCategories = it
+                        updateAdapterItems()
+                    }
+                }
             }
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to initialize collapsedCategories", t)
