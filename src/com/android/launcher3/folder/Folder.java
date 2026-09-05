@@ -543,7 +543,8 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     }
 
     public boolean isInAppDrawer() {
-        return mInfo.container < 0 || mInfo.container == ItemInfo.NO_ID || mInfo.container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
+        return mInfo.container
+                == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
     }
 
     @Override
@@ -1352,20 +1353,51 @@ public class Folder extends AbstractFloatingView implements ClipPathView, DragSo
     public void onDropCompleted(final View target, final DragObject d,
             final boolean success) {
         if (isInAppDrawer()) {
-            if (success && d != null && d.dragInfo instanceof AppInfo) {
+            if (d != null && d.dragInfo instanceof AppInfo) {
                 AppInfo appInfo = (AppInfo) d.dragInfo;
-                mInfo.getContents().remove(d.dragInfo);
                 final String draggedAppKey = appInfo.toComponentKey().toString();
                 final int folderId = mInfo.id;
-                Executors.MAIN_EXECUTOR.post(() -> {
-                    com.android.launcher3.allapps.ActivityAllAppsContainerView appsView = mActivityContext.getAppsView();
-                    if (appsView != null && appsView.getActiveRecyclerView() != null) {
-                        com.android.launcher3.allapps.AlphabeticalAppsList appsList = appsView.getActiveRecyclerView().getApps();
-                        if (appsList instanceof app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
-                            ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) appsList).onAppDraggedOutOfFolder(draggedAppKey, folderId);
-                        }
+                if (success) {
+                    // ActivityAllAppsContainerView owns drops back into the drawer. Other
+                    // destinations (for example the workspace) only report completion here.
+                    if (!(target instanceof
+                            com.android.launcher3.allapps.ActivityAllAppsContainerView)) {
+                        Executors.MAIN_EXECUTOR.post(() -> {
+                            com.android.launcher3.allapps.ActivityAllAppsContainerView appsView =
+                                    mActivityContext.getAppsView();
+                            if (appsView != null && appsView.getActiveRecyclerView() != null) {
+                                com.android.launcher3.allapps.AlphabeticalAppsList appsList =
+                                        appsView.getActiveRecyclerView().getApps();
+                                if (appsList instanceof
+                                        app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                                    ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) appsList)
+                                            .onAppDraggedOutOfFolder(draggedAppKey, folderId);
+                                }
+                            }
+                        });
                     }
-                });
+                } else {
+                    // onDragStart removes the item optimistically. Restore the model and
+                    // rebuild the drawer from its unchanged persisted folder entry.
+                    if (!mInfo.getContents().contains(appInfo)) {
+                        int restoredRank = Utilities.boundToRange(
+                                appInfo.rank, 0, mInfo.getContents().size());
+                        mInfo.getContents().add(restoredRank, appInfo);
+                    }
+                    Executors.MAIN_EXECUTOR.post(() -> {
+                        com.android.launcher3.allapps.ActivityAllAppsContainerView appsView =
+                                mActivityContext.getAppsView();
+                        if (appsView != null && appsView.getActiveRecyclerView() != null) {
+                            com.android.launcher3.allapps.AlphabeticalAppsList appsList =
+                                    appsView.getActiveRecyclerView().getApps();
+                            if (appsList instanceof
+                                    app.lawnchair.allapps.LawnchairAlphabeticalAppsList) {
+                                ((app.lawnchair.allapps.LawnchairAlphabeticalAppsList) appsList)
+                                        .onAppDragCancelledFromFolder();
+                            }
+                        }
+                    });
+                }
             }
             if (isOpen()) {
                 close(true);

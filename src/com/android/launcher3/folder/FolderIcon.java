@@ -210,7 +210,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         icon.mFolderName.setText(android.text.TextUtils.isEmpty(folderInfo.title) ? "Folder" : folderInfo.title);
         icon.mFolderName.setCompoundDrawablePadding(0);
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) icon.mFolderName.getLayoutParams();
-        if (folderInfo.container == ItemInfo.NO_ID) {
+        if (folderInfo.container == LauncherSettings.Favorites.CONTAINER_ALL_APPS) {
             lp.topMargin = grid.getAllAppsProfile().getIconSizePx() + grid.getAllAppsProfile().getIconDrawablePaddingPx();
             icon.mBackground = new PreviewBackground(activity.getDragLayer().getContext());
         } else {
@@ -428,7 +428,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     }
     
     public boolean isInAppDrawer() {
-        return mInfo.container == ItemInfo.NO_ID;
+        return mInfo.container == LauncherSettings.Favorites.CONTAINER_ALL_APPS;
     }
 
     /**

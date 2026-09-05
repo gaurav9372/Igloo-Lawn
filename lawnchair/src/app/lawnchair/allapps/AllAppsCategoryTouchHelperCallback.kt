@@ -13,6 +13,8 @@ import com.android.launcher3.allapps.BaseAllAppsAdapter
 import com.android.launcher3.popup.PopupContainerWithArrow
 import com.android.launcher3.views.BubbleTextHolder
 
+private const val NO_CATEGORY_ID = "-100"
+
 /**
  * ItemTouchHelper.Callback for in-drawer category drag-and-drop reordering.
  *
@@ -166,28 +168,23 @@ class AllAppsCategoryTouchHelperCallback(
 
             if (fromItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
                 (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) &&
-                dist < hoverRadius) {
+                dist < hoverRadius
+            ) {
                 return false
             }
 
             val targetCatId = if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
                 if (fromPos > toPos) {
-                    // Dragging UPWARDS across header: enter category above this header
-                    val headerIdx = list.categoryList.indexOfFirst { it.title == toItem.sectionTitle }
-                    if (headerIdx > 0) {
-                        list.categoryList[headerIdx - 1].id.toString()
-                    } else if (headerIdx == 0) {
-                        list.categoryList.firstOrNull()?.id?.toString() ?: "no_category"
-                    } else {
-                        "no_category"
-                    }
+                    // Enter the rendered category immediately above this header. Category IDs
+                    // remain unambiguous when two categories have the same title.
+                    items.subList(0, toPos).asReversed().firstOrNull {
+                        it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER
+                    }?.categoryId ?: toItem.categoryId ?: NO_CATEGORY_ID
                 } else {
-                    // Dragging DOWNWARDS across header: enter category of this header
-                    val targetCat = list.categoryList.find { it.title == toItem.sectionTitle }
-                    targetCat?.id?.toString() ?: "no_category"
+                    toItem.categoryId ?: NO_CATEGORY_ID
                 }
             } else {
-                toItem.categoryId
+                toItem.categoryId ?: NO_CATEGORY_ID
             }
 
             if (!targetCatId.isNullOrEmpty()) {

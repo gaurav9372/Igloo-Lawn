@@ -6,11 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
 import app.lawnchair.data.folder.FolderEntry
@@ -35,6 +30,13 @@ import com.android.launcher3.util.ComponentKey
 import com.android.launcher3.views.ActivityContext
 import com.patrykmichalik.opto.core.onEach
 import java.util.function.Predicate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+
+private const val NO_CATEGORY_ID = "-100"
 
 @Suppress("SYNTHETIC_PROPERTY_WITHOUT_JAVA_ORIGIN")
 class LawnchairAlphabeticalAppsList<T>(
@@ -171,25 +173,17 @@ class LawnchairAlphabeticalAppsList<T>(
                         if (idx != -1) idx else Int.MAX_VALUE
                     }
                 }
-            } else null
-        }
-        .onEach { sortedCategories ->
-            if (sortedCategories != null) {
-                categoryList = sortedCategories.toMutableList()
-                onAppsUpdated()
+            } else {
+                null
             }
         }
-        .launchIn(context.launcher.lifecycleScope)
-    }
-
-    private fun findAppInStore(componentKey: ComponentKey): AppInfo? {
-        val exact = appsStore.getApp(componentKey)
-        if (exact != null) return exact
-        val pkg = componentKey.componentName?.packageName ?: return null
-        val user = componentKey.user
-        return appsStore.apps?.firstOrNull { app ->
-            app != null && app.user == user && app.componentName?.packageName == pkg
-        }
+            .onEach { sortedCategories ->
+                if (sortedCategories != null) {
+                    categoryList = sortedCategories.toMutableList()
+                    onAppsUpdated()
+                }
+            }
+            .launchIn(context.launcher.lifecycleScope)
     }
 
     override fun updateItemFilter(itemFilter: Predicate<ItemInfo>?) {
@@ -202,11 +196,7 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     override fun addAppsWithSections(appList: List<AppInfo>?, startPosition: Int): Int {
-        val effectiveAppList = if (appList.isNullOrEmpty() && appsStore?.apps != null && appsStore.apps.isNotEmpty()) {
-            appsStore.apps.toList()
-        } else {
-            appList
-        }
+        val effectiveAppList = appList
         if (effectiveAppList.isNullOrEmpty()) return startPosition
         val drawerListDefault = prefs.drawerList.get()
         filteredList.clear()
@@ -215,15 +205,20 @@ class LawnchairAlphabeticalAppsList<T>(
         // Show app drawer folders only on main profile, to prevent state complexity
         if (isWorkOrPrivateSpace(effectiveAppList)) return super.addAppsWithSections(effectiveAppList, position)
 
+        // Category and folder keys must resolve only inside the list that passed the active
+        // profile/visibility filter. Looking them up in AllAppsStore can leak a work/private or
+        // hidden row into this adapter.
+        val validApps = effectiveAppList.filterNotNull()
+        val eligibleAppsByKey = validApps.associateBy { it.toComponentKey().toString() }
+
         if (categoryList.isNotEmpty()) {
-            val validApps = effectiveAppList.mapNotNull { it }
             val assignedAppKeys = mutableSetOf<String>()
             val globalProcessedAppKeys = mutableSetOf<String>()
             val globalProcessedFolderIds = mutableSetOf<Int>()
             val isAccordion = categoriesAsAccordions
 
             val directUserCategoryKeys = categoryList
-                .filter { it.id != -100 }
+                .filter { it.id.toString() != NO_CATEGORY_ID }
                 .flatMap { it.itemComponentKeys }
                 .toSet()
 
@@ -233,20 +228,13 @@ class LawnchairAlphabeticalAppsList<T>(
                 .toSet()
 
             val allUserClaimedKeys = directUserCategoryKeys + userCategoryFolderAppKeys
-            val allUserClaimedPackageUserSet = allUserClaimedKeys.mapNotNull { keyStr ->
-                val ck = ComponentKey.fromString(keyStr) ?: return@mapNotNull null
-                (ck.componentName?.packageName ?: return@mapNotNull null) to ck.user
-            }.toSet()
-
             fun isClaimedByUserCategory(appInfo: AppInfo): Boolean {
                 val appKey = appInfo.toComponentKey().toString()
-                if (allUserClaimedKeys.contains(appKey)) return true
-                val pkg = appInfo.componentName?.packageName ?: return false
-                return allUserClaimedPackageUserSet.contains(pkg to appInfo.user)
+                return allUserClaimedKeys.contains(appKey)
             }
 
             categoryList.forEach { categoryEntry ->
-                if (categoryEntry.id == -100) {
+                if (categoryEntry.id.toString() == NO_CATEGORY_ID) {
                     val unassignedOrder = prefs.unassignedCategoryOrder.get()
                         .split("|")
                         .filter { it.isNotBlank() }
@@ -260,7 +248,7 @@ class LawnchairAlphabeticalAppsList<T>(
                     }
 
                     if (unassignedApps.isNotEmpty()) {
-                        val categoryIdStr = "-100"
+                        val categoryIdStr = NO_CATEGORY_ID
                         val isCollapsed = isAccordion && collapsedCategories.contains(categoryIdStr)
                         val headerItem = AdapterItem.asCategoryHeader("No Category", unassignedApps.size).apply {
                             categoryId = categoryIdStr
@@ -286,7 +274,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                         val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
                                             if (hiddenApps.contains(keyString)) return@mapNotNull null
                                             val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                            val app = appsStore.getApp(componentKey) as? AppInfo
+                                            val app = eligibleAppsByKey[componentKey.toString()]
                                             if (app != null && unassignedApps.contains(app)) app else null
                                         }
 
@@ -294,7 +282,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                             val folderInfo = FolderInfo().apply {
                                                 id = targetFolder.id
                                                 title = if (targetFolder.title.isNullOrBlank()) "Folder" else targetFolder.title
-                                                container = ItemInfo.NO_ID
+                                                container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS
                                                 folderApps.forEach { add(it) }
                                             }
                                             val folderAdapterItem = AdapterItem.asFolder(folderInfo)
@@ -332,7 +320,7 @@ class LawnchairAlphabeticalAppsList<T>(
                     val resolvedApps = fullCategoryAppKeys.mapNotNull { keyString ->
                         if (hiddenApps.contains(keyString)) return@mapNotNull null
                         val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                        findAppInStore(componentKey)
+                        eligibleAppsByKey[componentKey.toString()]
                     }
 
                     if (resolvedApps.isNotEmpty()) {
@@ -354,10 +342,7 @@ class LawnchairAlphabeticalAppsList<T>(
                                 if (!globalProcessedAppKeys.contains(appKey)) {
                                     val targetFolder = folderList.find { folderEntry ->
                                         !globalProcessedFolderIds.contains(folderEntry.id) &&
-                                            (folderEntry.itemComponentKeys.contains(appKey) ||
-                                                folderEntry.itemComponentKeys.any { key ->
-                                                    ComponentKey.fromString(key)?.componentName?.packageName == appInfo.componentName?.packageName
-                                                })
+                                            folderEntry.itemComponentKeys.contains(appKey)
                                     }
 
                                     var folderAdded = false
@@ -365,14 +350,14 @@ class LawnchairAlphabeticalAppsList<T>(
                                         val folderApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
                                             if (hiddenApps.contains(keyString)) return@mapNotNull null
                                             val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                            findAppInStore(componentKey)
+                                            eligibleAppsByKey[componentKey.toString()]
                                         }
 
                                         if (folderApps.size >= 2) {
                                             val folderInfo = FolderInfo().apply {
                                                 id = targetFolder.id
                                                 title = targetFolder.title
-                                                container = ItemInfo.NO_ID
+                                                container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS
                                                 folderApps.forEach { add(it) }
                                             }
                                             val folderAdapterItem = AdapterItem.asFolder(folderInfo)
@@ -411,7 +396,6 @@ class LawnchairAlphabeticalAppsList<T>(
         }
 
         if (!drawerListDefault) {
-            val validApps = effectiveAppList.mapNotNull { it }
             val finalCategorizedApps = categorizeAppsWithSystemAndGoogle(validApps, context)
 
             finalCategorizedApps.forEach { (category, apps) ->
@@ -420,7 +404,7 @@ class LawnchairAlphabeticalAppsList<T>(
                 } else {
                     val folderInfo = FolderInfo().apply {
                         title = category
-                        container = ItemInfo.NO_ID
+                        container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS
                         apps.forEach { add(it) }
                     }
                     mAdapterItems.add(AdapterItem.asFolder(folderInfo))
@@ -431,45 +415,43 @@ class LawnchairAlphabeticalAppsList<T>(
             val processedDefaultFolderIds = mutableSetOf<Int>()
             val processedDefaultAppKeys = mutableSetOf<String>()
 
-            effectiveAppList?.forEach { app ->
-                if (app != null) {
-                    val appKey = app.toComponentKey().toString()
-                    if (!processedDefaultAppKeys.contains(appKey)) {
-                        val targetFolder = folderList.find { folderEntry ->
-                            !processedDefaultFolderIds.contains(folderEntry.id) &&
-                                folderEntry.itemComponentKeys.contains(appKey)
+            validApps.forEach { app ->
+                val appKey = app.toComponentKey().toString()
+                if (!processedDefaultAppKeys.contains(appKey)) {
+                    val targetFolder = folderList.find { folderEntry ->
+                        !processedDefaultFolderIds.contains(folderEntry.id) &&
+                            folderEntry.itemComponentKeys.contains(appKey)
+                    }
+
+                    var folderAdded = false
+                    if (targetFolder != null) {
+                        val resolvedApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
+                            if (hiddenApps.contains(keyString)) return@mapNotNull null
+                            val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
+                            eligibleAppsByKey[componentKey.toString()]
                         }
 
-                        var folderAdded = false
-                        if (targetFolder != null) {
-                            val resolvedApps = targetFolder.itemComponentKeys.mapNotNull { keyString ->
-                                if (hiddenApps.contains(keyString)) return@mapNotNull null
-                                val componentKey = ComponentKey.fromString(keyString) ?: return@mapNotNull null
-                                appsStore.getApp(componentKey) as? AppInfo
+                        if (resolvedApps.size >= 2) {
+                            val folderInfo = FolderInfo().apply {
+                                id = targetFolder.id
+                                title = if (targetFolder.title.isNullOrBlank()) "Folder" else targetFolder.title
+                                container = com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS
+                                resolvedApps.forEach { add(it) }
                             }
-
-                            if (resolvedApps.size >= 2) {
-                                val folderInfo = FolderInfo().apply {
-                                    id = targetFolder.id
-                                    title = if (targetFolder.title.isNullOrBlank()) "Folder" else targetFolder.title
-                                    container = ItemInfo.NO_ID
-                                    resolvedApps.forEach { add(it) }
-                                }
-                                mAdapterItems.add(AdapterItem.asFolder(folderInfo))
-                                position++
-                                processedDefaultFolderIds.add(targetFolder.id)
-                                resolvedApps.forEach {
-                                    processedDefaultAppKeys.add(it.toComponentKey().toString())
-                                }
-                                folderAdded = true
-                            }
-                        }
-
-                        if (!folderAdded && !processedDefaultAppKeys.contains(appKey)) {
-                            mAdapterItems.add(AdapterItem.asApp(app))
-                            processedDefaultAppKeys.add(appKey)
+                            mAdapterItems.add(AdapterItem.asFolder(folderInfo))
                             position++
+                            processedDefaultFolderIds.add(targetFolder.id)
+                            resolvedApps.forEach {
+                                processedDefaultAppKeys.add(it.toComponentKey().toString())
+                            }
+                            folderAdded = true
                         }
+                    }
+
+                    if (!folderAdded && !processedDefaultAppKeys.contains(appKey)) {
+                        mAdapterItems.add(AdapterItem.asApp(app))
+                        processedDefaultAppKeys.add(appKey)
+                        position++
                     }
                 }
             }
@@ -480,16 +462,22 @@ class LawnchairAlphabeticalAppsList<T>(
 
     fun persistCategoryChanges() {
         val categoryKeyMap = mutableMapOf<String, MutableList<String>>()
+        val renderedCategoryIds = mutableSetOf<String>()
 
         mAdapterItems.forEach { item ->
             val catId = item.categoryId
             if (!catId.isNullOrEmpty()) {
+                if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                    renderedCategoryIds.add(catId)
+                }
                 val keys = when (item.viewType) {
                     BaseAllAppsAdapter.VIEW_TYPE_ICON -> listOfNotNull(item.itemInfo?.toComponentKey()?.toString())
+
                     BaseAllAppsAdapter.VIEW_TYPE_FOLDER -> item.folderInfo?.getContents()?.mapNotNull { itemInfo ->
                         (itemInfo as? AppInfo)?.toComponentKey()?.toString()
                             ?: (itemInfo as? com.android.launcher3.model.data.WorkspaceItemInfo)?.targetComponent?.let { ComponentKey(it, itemInfo.user).toString() }
                     } ?: emptyList()
+
                     else -> emptyList()
                 }
                 if (keys.isNotEmpty()) {
@@ -505,10 +493,11 @@ class LawnchairAlphabeticalAppsList<T>(
             val keysForThisCatFromAdapter = (categoryKeyMap[categoryIdStr] ?: emptyList())
                 .filterNot { claimedKeys.contains(it) }
 
-            val finalKeys: List<String>
-            if (keysForThisCatFromAdapter.isNotEmpty()) {
-                claimedKeys.addAll(keysForThisCatFromAdapter)
-
+            val isCollapsed = categoriesAsAccordions && collapsedCategories.contains(categoryIdStr)
+            val wasRendered = renderedCategoryIds.contains(categoryIdStr)
+            val finalKeys = if (categoryIdStr == NO_CATEGORY_ID) {
+                keysForThisCatFromAdapter.distinct()
+            } else if (wasRendered && !isCollapsed) {
                 val uninstalledCategoryApps = categoryEntry.itemComponentKeys.filter { key ->
                     val ck = ComponentKey.fromString(key)
                     ck == null || (appsStore.getApp(ck) == null && appsStore.getApp(ck, AppInfo.PACKAGE_KEY_COMPARATOR) == null)
@@ -518,20 +507,21 @@ class LawnchairAlphabeticalAppsList<T>(
                     hiddenApps.contains(key)
                 }.filterNot { claimedKeys.contains(it) }
 
-                finalKeys = (keysForThisCatFromAdapter + uninstalledCategoryApps + hiddenCategoryApps).distinct()
-                claimedKeys.addAll(finalKeys)
-
-                categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, finalKeys)
+                (keysForThisCatFromAdapter + uninstalledCategoryApps + hiddenCategoryApps).distinct()
             } else {
-                finalKeys = categoryEntry.itemComponentKeys
-                claimedKeys.addAll(finalKeys)
+                categoryEntry.itemComponentKeys.filterNot { claimedKeys.contains(it) }
+            }
+            claimedKeys.addAll(finalKeys)
+
+            if (categoryIdStr != NO_CATEGORY_ID && finalKeys != categoryEntry.itemComponentKeys) {
+                categoryViewModel.updateCategoryItems(categoryEntry.id, categoryEntry.title, finalKeys)
             }
 
             categoryEntry.copy(itemComponentKeys = finalKeys)
         }
         categoryList = updatedList.toMutableList()
 
-        val rawNoCatKeys = categoryKeyMap["no_category"] ?: emptyList()
+        val rawNoCatKeys = categoryKeyMap[NO_CATEGORY_ID] ?: emptyList()
         val noCategoryKeys = rawNoCatKeys.filterNot { claimedKeys.contains(it) }.distinct()
 
         prefs.unassignedCategoryOrder.set(noCategoryKeys.joinToString("|"))
@@ -552,12 +542,12 @@ class LawnchairAlphabeticalAppsList<T>(
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val folderId = app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).createFolderWithItems(
                 title = "Folder",
-                componentKeys = listOf(targetAppKey, draggedAppKey)
+                componentKeys = listOf(targetAppKey, draggedAppKey),
             )
             val newEntry = FolderEntry(id = folderId, title = "Folder", itemComponentKeys = listOf(targetAppKey, draggedAppKey))
             folderList = (folderList.filterNot { it.id == folderId } + newEntry).toMutableList()
 
-            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
+            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != NO_CATEGORY_ID) {
                 val catIdInt = targetCategoryId.toIntOrNull()
                 categoryList = categoryList.map { cat ->
                     if (cat.id.toString() == targetCategoryId) {
@@ -593,14 +583,14 @@ class LawnchairAlphabeticalAppsList<T>(
 
     fun addAppToFolder(folderId: Int, folderTitle: String, draggedAppKey: String, targetCategoryId: String?) {
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != "no_category") {
+            if (!targetCategoryId.isNullOrEmpty() && targetCategoryId != NO_CATEGORY_ID) {
                 try {
                     val catId = targetCategoryId.toInt()
                     app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to move dragged app to target category", e)
                 }
-            } else if (targetCategoryId == "no_category") {
+            } else if (targetCategoryId == NO_CATEGORY_ID) {
                 try {
                     app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).removeComponentKeysFromAllCategories(listOf(draggedAppKey))
                 } catch (e: Exception) {
@@ -614,7 +604,7 @@ class LawnchairAlphabeticalAppsList<T>(
             app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
                 folderInfoId = folderId,
                 title = folderTitle,
-                componentKeys = updatedKeys
+                componentKeys = updatedKeys,
             )
             val updatedEntry = FolderEntry(id = folderId, title = folderTitle, itemComponentKeys = updatedKeys)
             folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
@@ -641,53 +631,59 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     fun onAppDraggedOutOfFolder(draggedAppKey: String, folderId: Int) {
+        val folderEntry = folderList.find { it.id == folderId } ?: return
+        val remainingKeys = folderEntry.itemComponentKeys.filterNot { it == draggedAppKey }
+        val folderItem = mAdapterItems.find {
+            it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId
+        }
+        val categoryId = folderItem?.categoryId ?: categoryList.find { cat ->
+            cat.itemComponentKeys.any { key -> folderEntry.itemComponentKeys.contains(key) }
+        }?.id?.toString()
+
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val folderEntry = folderList.find { it.id == folderId }
-            val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
-            val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
-
-            val folderItem = mAdapterItems.find { it.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER && it.folderInfo?.id == folderId }
-            val categoryId = folderItem?.categoryId ?: categoryList.find { cat ->
-                cat.itemComponentKeys.any { key -> currentKeys.contains(key) }
-            }?.id?.toString()
-
-            if (remainingKeys.size < 2) {
-                try {
-                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to delete folder info", e)
+            try {
+                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).moveAppOutOfFolder(
+                    folderId = folderId,
+                    folderTitle = folderEntry.title,
+                    remainingFolderKeys = remainingKeys,
+                    componentKey = draggedAppKey,
+                    targetCategoryId = categoryId?.takeUnless { it == NO_CATEGORY_ID }?.toIntOrNull(),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to move app out of drawer folder", e)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onAppDragCancelledFromFolder()
                 }
-                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
-            } else {
-                val title = folderEntry?.title ?: "Folder"
-                try {
-                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
-                        folderInfoId = folderId,
-                        title = title,
-                        componentKeys = remainingKeys
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to update folder info", e)
-                }
-                val updatedEntry = FolderEntry(id = folderId, title = title, itemComponentKeys = remainingKeys)
-                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
-            }
-
-            if (!categoryId.isNullOrEmpty() && categoryId != "no_category") {
-                try {
-                    val catId = categoryId.toInt()
-                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to move dragged-out app to category", e)
-                }
+                return@launch
             }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                updateFolderEntryAfterRemoval(folderEntry, remainingKeys)
+                updateCategoryMembershipInMemory(draggedAppKey, categoryId)
                 updateAdapterItems()
                 adapter?.notifyDataSetChanged()
-                persistCategoryChanges()
             }
         }
+    }
+
+    private fun updateFolderEntryAfterRemoval(folderEntry: FolderEntry, remainingKeys: List<String>) {
+        folderList = if (remainingKeys.size < 2) {
+            folderList.filterNot { it.id == folderEntry.id }.toMutableList()
+        } else {
+            val updatedEntry = folderEntry.copy(itemComponentKeys = remainingKeys)
+            (folderList.filterNot { it.id == folderEntry.id } + updatedEntry).toMutableList()
+        }
+    }
+
+    private fun updateCategoryMembershipInMemory(componentKey: String, targetCategoryId: String?) {
+        categoryList = categoryList.map { category ->
+            if (category.id.toString() == NO_CATEGORY_ID) return@map category
+            val keys = category.itemComponentKeys.filterNot { it == componentKey }.toMutableList()
+            if (category.id.toString() == targetCategoryId && !keys.contains(componentKey)) {
+                keys.add(componentKey)
+            }
+            category.copy(itemComponentKeys = keys)
+        }.toMutableList()
     }
 
     private fun safeNotifyAdapter(action: () -> Unit) {
@@ -710,8 +706,8 @@ class LawnchairAlphabeticalAppsList<T>(
     }
 
     fun onAppRemovedFromFolder(draggedAppKey: String, folderId: Int) {
-        val folderEntry = folderList.find { it.id == folderId }
-        val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
+        val folderEntry = folderList.find { it.id == folderId } ?: return
+        val currentKeys = folderEntry.itemComponentKeys
         val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
 
         safeNotifyAdapter {
@@ -721,7 +717,6 @@ class LawnchairAlphabeticalAppsList<T>(
                 }
 
                 if (remainingKeys.size < 2) {
-                    folderList = folderList.filterNot { it.id == folderId }.toMutableList()
                     if (folderIndex != -1 && folderIndex in mAdapterItems.indices) {
                         val folderItem = mAdapterItems[folderIndex]
                         val remainingInfo = folderItem.folderInfo?.getContents()?.firstOrNull { info ->
@@ -740,10 +735,6 @@ class LawnchairAlphabeticalAppsList<T>(
                         }
                     }
                 } else {
-                    val updatedEntry = folderEntry?.copy(itemComponentKeys = remainingKeys)
-                    if (updatedEntry != null) {
-                        folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
-                    }
                     if (folderIndex != -1 && folderIndex in mAdapterItems.indices) {
                         val folderItem = mAdapterItems[folderIndex]
                         folderItem.folderInfo?.getContents()?.removeIf { info ->
@@ -755,6 +746,13 @@ class LawnchairAlphabeticalAppsList<T>(
             } catch (e: Exception) {
                 Log.w(TAG, "Failed in onAppRemovedFromFolder", e)
             }
+        }
+    }
+
+    fun onAppDragCancelledFromFolder() {
+        safeNotifyAdapter {
+            updateAdapterItems()
+            adapter?.notifyDataSetChanged()
         }
     }
 
@@ -778,15 +776,12 @@ class LawnchairAlphabeticalAppsList<T>(
                             break
                         }
                         if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                            val cat = categoryList.find { it.title == item.sectionTitle }
-                            if (cat != null) {
-                                resolvedCatId = cat.id.toString()
-                                break
-                            }
+                            resolvedCatId = item.categoryId
+                            if (resolvedCatId != null) break
                         }
                     }
                 }
-                val targetCatId = resolvedCatId ?: "no_category"
+                val targetCatId = resolvedCatId ?: NO_CATEGORY_ID
 
                 val targetItem = mAdapterItems[targetPos]
                 val effectivePos = if (targetItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
@@ -833,56 +828,37 @@ class LawnchairAlphabeticalAppsList<T>(
                         break
                     }
                     if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
-                        val cat = categoryList.find { it.title == item.sectionTitle }
-                        if (cat != null) {
-                            dropCatId = cat.id.toString()
-                            break
-                        }
+                        dropCatId = item.categoryId
+                        if (dropCatId != null) break
                     }
                 }
             }
         }
-        val targetCatId = dropCatId ?: "no_category"
+        val targetCatId = dropCatId ?: NO_CATEGORY_ID
+        val folderEntry = folderList.find { it.id == folderId } ?: return
+        val remainingKeys = folderEntry.itemComponentKeys.filterNot { it == draggedAppKey }
 
         context.launcher.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            if (targetCatId != "no_category") {
-                try {
-                    val catId = targetCatId.toInt()
-                    app.lawnchair.data.category.service.CategoryService.INSTANCE.get(context).moveAppToCategory(draggedAppKey, catId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to move dragged app to target category", e)
+            try {
+                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).moveAppOutOfFolder(
+                    folderId = folderId,
+                    folderTitle = folderEntry.title,
+                    remainingFolderKeys = remainingKeys,
+                    componentKey = draggedAppKey,
+                    targetCategoryId = targetCatId.takeUnless { it == NO_CATEGORY_ID }?.toIntOrNull(),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to drop app out of drawer folder", e)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onAppDragCancelledFromFolder()
                 }
-            }
-
-            val folderEntry = folderList.find { it.id == folderId }
-            val currentKeys = folderEntry?.itemComponentKeys ?: emptyList()
-            val remainingKeys = currentKeys.filterNot { it == draggedAppKey }
-
-            if (remainingKeys.size < 2) {
-                try {
-                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).deleteFolderInfo(folderId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to delete folder info", e)
-                }
-                folderList = folderList.filterNot { it.id == folderId }.toMutableList()
-            } else {
-                val title = folderEntry?.title ?: "Folder"
-                try {
-                    app.lawnchair.data.folder.service.FolderService.INSTANCE.get(context).updateFolderWithItems(
-                        folderInfoId = folderId,
-                        title = title,
-                        componentKeys = remainingKeys
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to update folder info", e)
-                }
-                val updatedEntry = FolderEntry(id = folderId, title = title, itemComponentKeys = remainingKeys)
-                folderList = (folderList.filterNot { it.id == folderId } + updatedEntry).toMutableList()
+                return@launch
             }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 safeNotifyAdapter {
-                    persistCategoryChanges()
+                    updateFolderEntryAfterRemoval(folderEntry, remainingKeys)
+                    updateCategoryMembershipInMemory(draggedAppKey, targetCatId)
                     updateAdapterItems()
                     adapter?.notifyDataSetChanged()
                 }

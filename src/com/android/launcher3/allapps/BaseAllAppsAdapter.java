@@ -177,7 +177,17 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
          * Returns true if the items represent the same object
          */
         public boolean isSameAs(AdapterItem other) {
-            return (other.viewType == viewType) && (other.getClass() == getClass());
+            if (other == null || other.viewType != viewType || other.getClass() != getClass()) {
+                return false;
+            }
+            if (viewType == VIEW_TYPE_ICON) {
+                return itemInfo != null && other.itemInfo != null
+                        && itemInfo.componentName != null
+                        && itemInfo.componentName.equals(other.itemInfo.componentName)
+                        && java.util.Objects.equals(itemInfo.user, other.itemInfo.user)
+                        && java.util.Objects.equals(categoryId, other.categoryId);
+            }
+            return true;
         }
 
         /**
@@ -185,12 +195,14 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
          * as well. Returning true will prevent redrawing of thee item.
          */
         public boolean isContentSame(AdapterItem other) {
-            if (other == null || other.viewType != viewType) return false;
-            if (folderInfo != null && other.folderInfo != null) {
-                if (folderInfo.getContents().size() != other.folderInfo.getContents().size()) {
-                    return false;
-                }
-                return java.util.Objects.equals(folderInfo.title, other.folderInfo.title);
+            if (!isSameAs(other)) return false;
+            // AppInfo and FolderInfo are mutable and shared by the old and new lists.
+            // Rebind data-bearing rows: reference equality or folder size/title cannot
+            // detect icon updates or replacement of a folder child. In particular, every
+            // row has a default FolderInfo, which must never stand in for app contents.
+            if (viewType == VIEW_TYPE_ICON || viewType == VIEW_TYPE_FOLDER
+                    || viewType == VIEW_TYPE_CATEGORY_HEADER) {
+                return false;
             }
             return itemInfo == null && other.itemInfo == null;
         }

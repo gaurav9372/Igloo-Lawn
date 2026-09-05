@@ -204,7 +204,8 @@ public class FolderInfo extends CollectionInfo {
         } else {
             options &= ~FLAG_MANUAL_FOLDER_NAME;
         }
-        boolean isAppDrawerFolder = container == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS || container < 0 || container == ItemInfo.NO_ID;
+        boolean isAppDrawerFolder = container
+                == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
 
         if (!isAppDrawerFolder && modelWriter != null) {
             try {

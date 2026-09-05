@@ -41,16 +41,9 @@ class FolderService @Inject constructor(
     }
 
     suspend fun createFolderWithItems(title: String, componentKeys: List<String>): Int = withContext(Dispatchers.IO) {
-        val folderId = folderDao.insertFolder(FolderInfoEntity(title = title)).toInt()
-        val items = componentKeys.mapIndexed { index, componentKey ->
-            FolderItemEntity(
-                folderId = folderId,
-                rank = index,
-                componentKey = componentKey,
-            )
-        }
-        folderDao.insertFolderItems(items)
-        folderId
+        val distinctKeys = componentKeys.distinct()
+        require(distinctKeys.size >= 2) { "An app drawer folder requires at least two apps" }
+        folderDao.createFolderWithItems(title, distinctKeys)
     }
 
     suspend fun saveFolderInfo(title: String) = withContext(Dispatchers.IO) {
@@ -63,6 +56,22 @@ class FolderService @Inject constructor(
 
     suspend fun deleteFolderInfo(id: Int) = withContext(Dispatchers.IO) {
         folderDao.deleteFolder(id)
+    }
+
+    suspend fun moveAppOutOfFolder(
+        folderId: Int,
+        folderTitle: String,
+        remainingFolderKeys: List<String>,
+        componentKey: String,
+        targetCategoryId: Int?,
+    ) = withContext(Dispatchers.IO) {
+        folderDao.moveAppOutOfFolder(
+            folderId = folderId,
+            folderTitle = folderTitle,
+            remainingFolderKeys = remainingFolderKeys,
+            componentKey = componentKey,
+            targetCategoryId = targetCategoryId,
+        )
     }
 
     private fun FolderWithItems.toFolderEntry() = FolderEntry(

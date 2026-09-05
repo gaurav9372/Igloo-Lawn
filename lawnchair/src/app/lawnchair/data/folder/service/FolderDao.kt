@@ -9,6 +9,8 @@ import androidx.room.RawQuery
 import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
+import app.lawnchair.data.category.CategoryInfoEntity
+import app.lawnchair.data.category.CategoryItemEntity
 import app.lawnchair.data.folder.FolderInfoEntity
 import app.lawnchair.data.folder.FolderItemEntity
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,21 @@ interface FolderDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFolderItems(items: List<FolderItemEntity>)
+
+    @Transaction
+    suspend fun createFolderWithItems(title: String, componentKeys: List<String>): Int {
+        val folderId = insertFolder(FolderInfoEntity(title = title)).toInt()
+        insertFolderItems(
+            componentKeys.mapIndexed { index, componentKey ->
+                FolderItemEntity(
+                    folderId = folderId,
+                    rank = index,
+                    componentKey = componentKey,
+                )
+            },
+        )
+        return folderId
+    }
 
     @Query("SELECT * FROM Folders")
     @Transaction
@@ -57,6 +74,52 @@ interface FolderDao {
 
     @Query("DELETE FROM Folders WHERE id = :folderId")
     suspend fun deleteFolder(folderId: Int)
+
+    @Query("DELETE FROM CategoryItems WHERE item_info = :componentKey")
+    suspend fun removeAppFromCategories(componentKey: String)
+
+    @Query("SELECT * FROM Categories WHERE id = :categoryId LIMIT 1")
+    suspend fun getCategoryById(categoryId: Int): CategoryInfoEntity?
+
+    @Query("SELECT MAX(rank) FROM CategoryItems WHERE categoryId = :categoryId")
+    suspend fun getMaxCategoryRank(categoryId: Int): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategoryItem(item: CategoryItemEntity)
+
+    @Transaction
+    suspend fun moveAppOutOfFolder(
+        folderId: Int,
+        folderTitle: String,
+        remainingFolderKeys: List<String>,
+        componentKey: String,
+        targetCategoryId: Int?,
+    ) {
+        if (remainingFolderKeys.size < 2) {
+            deleteFolder(folderId)
+        } else {
+            replaceFolderItems(
+                folderId,
+                folderTitle,
+                remainingFolderKeys.mapIndexed { index, key ->
+                    FolderItemEntity(folderId = folderId, rank = index, componentKey = key)
+                },
+            )
+        }
+
+        removeAppFromCategories(componentKey)
+        if (targetCategoryId != null && targetCategoryId > 0 &&
+            getCategoryById(targetCategoryId) != null
+        ) {
+            insertCategoryItem(
+                CategoryItemEntity(
+                    categoryId = targetCategoryId,
+                    rank = (getMaxCategoryRank(targetCategoryId) ?: -1) + 1,
+                    componentKey = componentKey,
+                ),
+            )
+        }
+    }
 
     @RawQuery
     suspend fun checkpoint(supportSQLiteQuery: SupportSQLiteQuery): Int
