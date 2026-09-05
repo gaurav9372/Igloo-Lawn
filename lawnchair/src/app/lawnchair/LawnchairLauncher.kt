@@ -25,13 +25,19 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Pair
 import android.view.Display
+import android.view.Gravity
 import android.view.View
 import android.view.ViewTreeObserver
+import android.widget.FrameLayout
 import android.window.SplashScreen
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
+import app.lawnchair.allapps.MultiSelectManager
+import app.lawnchair.allapps.MultiSelectTopBar
+import app.lawnchair.allapps.MultiSelectUninstallController
 import app.lawnchair.compat.LawnchairQuickstepCompat
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.service.WallpaperService
@@ -46,14 +52,9 @@ import app.lawnchair.preferences2.firstCached
 import app.lawnchair.root.RootHelperManager
 import app.lawnchair.root.RootNotAvailableException
 import app.lawnchair.theme.ThemeProvider
-import android.view.Gravity
-import android.widget.FrameLayout
-import androidx.compose.ui.platform.ComposeView
-import app.lawnchair.allapps.MultiSelectManager
-import app.lawnchair.allapps.MultiSelectTopBar
-import app.lawnchair.ui.theme.LawnchairTheme
 import app.lawnchair.ui.popup.LauncherOptionsPopup
 import app.lawnchair.ui.popup.LawnchairShortcut
+import app.lawnchair.ui.theme.LawnchairTheme
 import app.lawnchair.util.getThemedIconPacksInstalled
 import app.lawnchair.util.unsafeLazy
 import app.lawnchair.views.LawnchairFloatingSurfaceView
@@ -156,6 +157,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     private lateinit var colorScheme: ColorScheme
     private var hasBackGesture = false
     private var multiSelectOverlayView: ComposeView? = null
+    private val multiSelectUninstallController by lazy { MultiSelectUninstallController(this) }
 
     val gestureController by unsafeLazy { GestureController(this) }
 
@@ -215,7 +217,11 @@ class LawnchairLauncher : QuickstepLauncher() {
             override fun onStateTransitionComplete(finalState: LauncherState) {
                 // Exit drawer multi-select when leaving ALL_APPS.
                 // Do NOT exit homescreen multi-select when on NORMAL state — it lives there.
-                if (finalState != LauncherState.ALL_APPS && !MultiSelectManager.isHomescreenMode.value) {
+                if (
+                    finalState != LauncherState.ALL_APPS &&
+                    !MultiSelectManager.isHomescreenMode.value &&
+                    !MultiSelectManager.isUninstallInProgress.value
+                ) {
                     MultiSelectManager.exitMultiSelect()
                 } else if (finalState == LauncherState.ALL_APPS && MultiSelectManager.isHomescreenMode.value) {
                     // Entering drawer while homescreen multi-select is active → exit it.
@@ -361,6 +367,17 @@ class LawnchairLauncher : QuickstepLauncher() {
             return
         }
         super.onBackPressed()
+    }
+
+    fun multiSelectUninstallTargetCount(selectedKeys: Set<String>): Int = multiSelectUninstallController.eligibleTargetCount(selectedKeys)
+
+    fun startMultiSelectUninstall(selectedKeys: Set<String>) {
+        multiSelectUninstallController.start(selectedKeys)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        multiSelectUninstallController.onActivityResult(requestCode, resultCode)
     }
 
     fun updateTheme() {

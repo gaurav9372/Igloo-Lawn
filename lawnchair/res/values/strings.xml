@@ -1062,4 +1062,9 @@
     <string name="lawnchair_action_failed">Failed to trigger action</string>
 
     <string name="please_wait">Please wait…</string>
+    <string name="multi_select_no_uninstallable_apps">None of the selected apps can be uninstalled</string>
+    <plurals name="multi_select_uninstall_skipped">
+        <item quantity="one">Skipped %1$d app that could not be uninstalled</item>
+        <item quantity="other">Skipped %1$d apps that could not be uninstalled</item>
+    </plurals>
 </resources>

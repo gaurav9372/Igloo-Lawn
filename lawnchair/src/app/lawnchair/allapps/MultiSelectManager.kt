@@ -11,6 +11,9 @@ object MultiSelectManager {
     private val _selectedComponentKeys = MutableStateFlow<Set<String>>(emptySet())
     val selectedComponentKeys: StateFlow<Set<String>> = _selectedComponentKeys.asStateFlow()
 
+    private val _isUninstallInProgress = MutableStateFlow(false)
+    val isUninstallInProgress: StateFlow<Boolean> = _isUninstallInProgress.asStateFlow()
+
     /** True when multi-select was triggered from the homescreen (not the app drawer). */
     private val _isHomescreenMode = MutableStateFlow(false)
     val isHomescreenMode: StateFlow<Boolean> = _isHomescreenMode.asStateFlow()
@@ -67,9 +70,14 @@ object MultiSelectManager {
         return _selectedComponentKeys.value.contains(componentKey)
     }
 
+    fun setUninstallInProgress(inProgress: Boolean) {
+        _isUninstallInProgress.value = inProgress
+    }
+
     fun exitMultiSelect() {
         _isMultiSelectActive.value = false
         _isHomescreenMode.value = false
+        _isUninstallInProgress.value = false
         _selectedComponentKeys.value = emptySet()
         _selectedItemIds.value = emptyMap()
     }

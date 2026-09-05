@@ -1,8 +1,5 @@
 package app.lawnchair.allapps
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -34,8 +32,6 @@ import app.lawnchair.LawnchairLauncher
 import app.lawnchair.ui.popup.BatchSelectCategorySheet
 import app.lawnchair.views.ComposeBottomSheet
 import com.android.launcher3.R
-import com.android.launcher3.model.data.AppInfo
-import com.android.launcher3.util.ApplicationInfoWrapper
 import com.android.launcher3.util.ComponentKey
 
 @Composable
@@ -45,7 +41,11 @@ fun MultiSelectTopBar(
 ) {
     val selectedKeys by MultiSelectManager.selectedComponentKeys.collectAsStateWithLifecycle()
     val isHomescreenMode by MultiSelectManager.isHomescreenMode.collectAsStateWithLifecycle()
+    val isUninstallInProgress by MultiSelectManager.isUninstallInProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val uninstallableAppCount = remember(selectedKeys, isHomescreenMode) {
+        if (isHomescreenMode) 0 else launcher.multiSelectUninstallTargetCount(selectedKeys)
+    }
 
     Surface(
         modifier = modifier
@@ -104,10 +104,11 @@ fun MultiSelectTopBar(
                         Icon(
                             Icons.Rounded.Delete,
                             contentDescription = "Remove from homescreen",
-                            tint = if (selectedKeys.isNotEmpty())
+                            tint = if (selectedKeys.isNotEmpty()) {
                                 MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f),
+                            } else {
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f)
+                            },
                         )
                     }
                 } else {
@@ -127,10 +128,11 @@ fun MultiSelectTopBar(
                         Icon(
                             Icons.Rounded.Home,
                             contentDescription = "Add to Homescreen",
-                            tint = if (selectedKeys.isNotEmpty())
+                            tint = if (selectedKeys.isNotEmpty()) {
                                 MaterialTheme.colorScheme.onSurface
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                         )
                     }
 
@@ -159,10 +161,11 @@ fun MultiSelectTopBar(
                         Icon(
                             Icons.Rounded.Edit,
                             contentDescription = "Edit Category",
-                            tint = if (selectedKeys.isNotEmpty())
+                            tint = if (selectedKeys.isNotEmpty()) {
                                 MaterialTheme.colorScheme.onSurface
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                         )
                     }
 
@@ -173,17 +176,18 @@ fun MultiSelectTopBar(
                                 Toast.makeText(context, "No apps selected", Toast.LENGTH_SHORT).show()
                                 return@IconButton
                             }
-                            uninstallSelectedApps(context, selectedKeys)
+                            launcher.startMultiSelectUninstall(selectedKeys)
                         },
-                        enabled = selectedKeys.isNotEmpty(),
+                        enabled = uninstallableAppCount > 0 && !isUninstallInProgress,
                     ) {
                         Icon(
                             Icons.Rounded.Delete,
                             contentDescription = "Uninstall",
-                            tint = if (selectedKeys.isNotEmpty())
+                            tint = if (uninstallableAppCount > 0 && !isUninstallInProgress) {
                                 MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f),
+                            } else {
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.38f)
+                            },
                         )
                     }
                 }
@@ -230,21 +234,5 @@ private fun addSelectedAppsToHomescreen(launcher: LawnchairLauncher, selectedKey
         return
     }
     app.lawnchair.ui.popup.addAppsToHomescreen(launcher, appInfos)
-    MultiSelectManager.exitMultiSelect()
-}
-
-private fun uninstallSelectedApps(context: Context, selectedKeys: Set<String>) {
-    val uninstalledPackages = mutableSetOf<String>()
-    selectedKeys.forEach { keyStr ->
-        val componentKey = ComponentKey.fromString(keyStr) ?: return@forEach
-        val packageName = componentKey.componentName.packageName
-        if (!uninstalledPackages.contains(packageName) && !ApplicationInfoWrapper(context, packageName, componentKey.user).isSystem()) {
-            uninstalledPackages.add(packageName)
-            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-        }
-    }
     MultiSelectManager.exitMultiSelect()
 }
