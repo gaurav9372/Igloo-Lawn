@@ -142,6 +142,7 @@ class PreferenceManager @Inject constructor(
     val searchResultCalculator = BoolPref("pref_searchResultCalculator", false)
 
     val drawerRecentApps = BoolPref("pref_drawerRecentApps", true, recreate)
+    val drawerRecentAppsRows = IntPref("pref_drawerRecentAppsRows", 1, recreate)
     val searchResultRecentApps = BoolPref("pref_searchResultRecentApps", true, recreate)
     val searchResultFrequentApps = BoolPref("pref_searchResultFrequentApps", true, recreate)
     val searchResultApps = BoolPref("pref_searchResultApps", true, recreate)

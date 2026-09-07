@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +45,8 @@ import app.lawnchair.ui.preferences.components.AppDrawerHapticFeedbackPreference
 import app.lawnchair.ui.preferences.components.NavigationActionPreference
 import app.lawnchair.ui.preferences.components.SuggestionsPreference
 import app.lawnchair.ui.preferences.components.colorpreference.ColorPreference
+import app.lawnchair.ui.preferences.components.controls.ListPreference
+import app.lawnchair.ui.preferences.components.controls.ListPreferenceEntry
 import app.lawnchair.ui.preferences.components.controls.SliderPreference
 import app.lawnchair.ui.preferences.components.controls.SwitchPreference
 import app.lawnchair.ui.preferences.components.controls.SwitchPreferenceWithPreview
@@ -89,10 +92,24 @@ fun AppDrawerPreferences(
                 subtitle = resources.getQuantityString(R.plurals.apps_count, hiddenApps.size, hiddenApps.size),
             )
             SearchBarPreference(SearchRoute.DRAWER_SEARCH, showLabel = false)
+            val recentAppsAdapter = prefs.drawerRecentApps.getAdapter()
             SwitchPreference(
-                adapter = prefs.drawerRecentApps.getAdapter(),
+                adapter = recentAppsAdapter,
                 label = "Recent apps",
             )
+            val recentRowsOptions = remember {
+                listOf(
+                    ListPreferenceEntry(1) { "1 row" },
+                    ListPreferenceEntry(2) { "2 rows" },
+                )
+            }
+            ExpandAndShrink(visible = recentAppsAdapter.state.value) {
+                ListPreference(
+                    adapter = prefs.drawerRecentAppsRows.getAdapter(),
+                    entries = recentRowsOptions,
+                    label = "Recent app rows",
+                )
+            }
             SuggestionsPreference()
             AppDrawerHapticFeedbackPreference()
         }

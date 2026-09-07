@@ -127,6 +127,9 @@ class LawnchairAlphabeticalAppsList<T>(
             prefs.drawerRecentApps.subscribeChanges {
                 onAppsUpdated()
             }
+            prefs.drawerRecentAppsRows.subscribeChanges {
+                onAppsUpdated()
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to initialize drawerRecentApps observer", t)
         }
@@ -241,10 +244,13 @@ class LawnchairAlphabeticalAppsList<T>(
         val showRecentApps = prefs.drawerRecentApps.get()
         if (showRecentApps) {
             val cols = com.android.launcher3.LauncherAppState.getIDP(context).numAllAppsColumns
-            val rawRecentApps = app.lawnchair.search.AppLaunchTracker.getRecentApps(context, cols)
+            val rows = prefs.drawerRecentAppsRows.get().coerceIn(1, 2)
+            val maxCount = cols * rows
+            val rawRecentApps = app.lawnchair.search.AppLaunchTracker.getRecentApps(context, maxCount + 10)
             val recentApps = rawRecentApps
                 .mapNotNull { eligibleAppsByKey[it.toComponentKey().toString()] }
                 .filterNot { hiddenApps.contains(it.toComponentKey().toString()) }
+                .take(maxCount)
 
             if (recentApps.isNotEmpty()) {
                 val headerItem = AdapterItem.asCategoryHeader("Recent").apply {

@@ -32,6 +32,8 @@ class RecentAppsSectionDecorator(
         var minTop = Float.MAX_VALUE
         var maxBottom = Float.MIN_VALUE
         var hasVisibleRecentIcons = false
+        var firstVisibleRecentPos = Int.MAX_VALUE
+        var lastVisibleRecentPos = -1
 
         for (i in 0 until parent.childCount) {
             val child = parent.getChildAt(i) ?: continue
@@ -47,10 +49,21 @@ class RecentAppsSectionDecorator(
                 if (top < minTop) minTop = top
                 if (bottom > maxBottom) maxBottom = bottom
                 hasVisibleRecentIcons = true
+                if (pos < firstVisibleRecentPos) firstVisibleRecentPos = pos
+                if (pos > lastVisibleRecentPos) lastVisibleRecentPos = pos
             }
         }
 
         if (!hasVisibleRecentIcons || minTop >= maxBottom) return
+
+        val firstRecentItemPos = items.indexOfFirst {
+            it.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID &&
+                it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
+        }
+        val lastRecentItemPos = items.indexOfLast {
+            it.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID &&
+                it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON
+        }
 
         val context = parent.context
         val resources = context.resources
@@ -58,6 +71,13 @@ class RecentAppsSectionDecorator(
         val horizontalMargin = 8.dpToPx(resources)
         val verticalPadding = 6.dpToPx(resources)
         val cornerRadius = 18.dpToPx(resources)
+
+        if (firstRecentItemPos != -1 && firstVisibleRecentPos > firstRecentItemPos) {
+            minTop = kotlin.math.min(minTop, -verticalPadding)
+        }
+        if (lastRecentItemPos != -1 && lastVisibleRecentPos < lastRecentItemPos) {
+            maxBottom = kotlin.math.max(maxBottom, parent.height.toFloat() + verticalPadding)
+        }
 
         val left = parent.paddingLeft.toFloat() + horizontalMargin
         val right = (parent.width - parent.paddingRight).toFloat() - horizontalMargin
