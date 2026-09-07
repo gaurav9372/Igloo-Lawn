@@ -26,6 +26,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
 import androidx.compose.runtime.Composable
@@ -88,7 +89,7 @@ fun appsState(
                             pkg.startsWith("com.android.internal") || pkg == "android") {
                             continue
                         }
-                        val appInfo = ai.applicationInfo
+                        val appInfo = ai.applicationInfo ?: continue
                         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                         val state = pm.getApplicationEnabledSetting(pkg)
                         if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
@@ -113,9 +114,12 @@ fun appsState(
                     // Ignore fallback errors
                 }
 
-                appsState.value = (enabledApps + disabledApps)
+                val finalApps = (enabledApps + disabledApps)
                     .sortedWith(comparator)
                     .toList()
+                Utilities.postAsyncCallback(Handler(Looper.getMainLooper())) {
+                    appsState.value = finalApps
+                }
             }
         }
         onDispose { }

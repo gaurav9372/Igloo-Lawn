@@ -126,7 +126,7 @@ class MultiSelectUninstallController(
             data = Uri.fromParts(
                 "package",
                 target.packageName,
-                target.componentKey.componentName.className,
+                null,
             )
             putExtra(Intent.EXTRA_USER, target.user)
         }

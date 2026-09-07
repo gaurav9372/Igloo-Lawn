@@ -166,8 +166,11 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                 flagOp = FlagOp.NO_OP.removeFlag(WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE);
                 break;
             case OP_REMOVE: {
+                final LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
                 for (int i = 0; i < packageCount; i++) {
-                    if (new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                    ApplicationInfoWrapper wrapper = new ApplicationInfoWrapper(context, packages[i], mUser);
+                    boolean isInstalled = launcherApps != null && launcherApps.isPackageEnabled(packages[i], mUser);
+                    if (isInstalled || wrapper.isArchived()) {
                         continue;
                     }
                     iconCache.removeIconsForPkg(packages[i], mUser);
@@ -425,9 +428,12 @@ public class PackageUpdatedTask implements ModelUpdateTask {
 
         final HashSet<String> removedPackages = new HashSet<>();
         if (mOp == OP_REMOVE) {
+            final LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
             // Only mark packages to be removed if they are uninstalled from the device
             for (int i = 0; i < packageCount; i++) {
-                if (!new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                ApplicationInfoWrapper wrapper = new ApplicationInfoWrapper(context, packages[i], mUser);
+                boolean isInstalled = launcherApps != null && launcherApps.isPackageEnabled(packages[i], mUser);
+                if (!isInstalled && !wrapper.isArchived()) {
                     removedPackages.add(packages[i]);
                 }
             }

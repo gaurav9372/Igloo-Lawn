@@ -71,6 +71,18 @@ public class MainThreadInitializedObject<T> {
     protected void onPostInit(Context context) {
     }
 
+    public void reset() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            mValue = null;
+        } else {
+            try {
+                MAIN_EXECUTOR.submit(() -> mValue = null).get();
+            } catch (Exception ignored) {
+                mValue = null;
+            }
+        }
+    }
+
     public interface ObjectProvider<T> {
 
         T get(Context context);

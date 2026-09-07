@@ -20,19 +20,23 @@ object AppLaunchTracker {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    @Synchronized
     fun recordAppLaunch(context: Context, componentKey: String) {
         if (componentKey.isBlank()) return
-        val prefs = getPrefs(context)
-        val events = loadEvents(prefs).toMutableList()
-        events.add(LaunchEvent(componentKey, System.currentTimeMillis()))
+        val appContext = context.applicationContext
+        com.android.launcher3.util.Executors.MODEL_EXECUTOR.execute {
+            synchronized(this) {
+                val prefs = getPrefs(appContext)
+                val events = loadEvents(prefs).toMutableList()
+                events.add(LaunchEvent(componentKey, System.currentTimeMillis()))
 
-        val trimmedEvents = if (events.size > MAX_SAVED_EVENTS) {
-            events.takeLast(MAX_SAVED_EVENTS)
-        } else {
-            events
+                val trimmedEvents = if (events.size > MAX_SAVED_EVENTS) {
+                    events.takeLast(MAX_SAVED_EVENTS)
+                } else {
+                    events
+                }
+                saveEvents(prefs, trimmedEvents)
+            }
         }
-        saveEvents(prefs, trimmedEvents)
     }
 
     @Synchronized

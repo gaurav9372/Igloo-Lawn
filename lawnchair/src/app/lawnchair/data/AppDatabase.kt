@@ -1,5 +1,6 @@
 package app.lawnchair.data
 
+import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -41,9 +42,6 @@ abstract class AppDatabase : RoomDatabase() {
 
     suspend fun checkpoint() {
         iconOverrideDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
-        wallpaperDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
-        folderDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
-        categoryDao().checkpoint(SimpleSQLiteQuery("pragma wal_checkpoint(full)"))
     }
 
     fun checkpointSync() {
@@ -149,8 +147,17 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_1_3)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
+                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()
+        }
+
+        fun reset(context: Context) {
+            try {
+                INSTANCE.get(context).close()
+            } catch (_: Throwable) {}
+            INSTANCE.reset()
         }
     }
 }

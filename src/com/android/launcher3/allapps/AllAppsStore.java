@@ -61,7 +61,7 @@ public class AllAppsStore<T extends Context & ActivityContext> {
     public static final int DEFER_UPDATES_TEST = 1 << 1;
 
     private PackageUserKey mTempKey = new PackageUserKey(null, null);
-    private AppInfo mTempInfo = new AppInfo();
+    private final ThreadLocal<AppInfo> mTempInfo = ThreadLocal.withInitial(AppInfo::new);
 
     private @NonNull AppInfo[] mApps = EMPTY_ARRAY;
 
@@ -163,9 +163,10 @@ public class AllAppsStore<T extends Context & ActivityContext> {
             }
             return null;
         }
-        mTempInfo.componentName = key.componentName;
-        mTempInfo.user = key.user;
-        int index = Arrays.binarySearch(mApps, mTempInfo, comparator);
+        AppInfo tempInfo = mTempInfo.get();
+        tempInfo.componentName = key.componentName;
+        tempInfo.user = key.user;
+        int index = Arrays.binarySearch(mApps, tempInfo, comparator);
         return index < 0 ? null : mApps[index];
     }
 

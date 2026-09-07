@@ -91,8 +91,19 @@ public class BaseLauncherBinder {
         try {
             for (Callbacks cb : mCallbacksList) {
                 if (cb instanceof com.android.launcher3.Launcher launcher) {
-                    if (launcher.getDragController() != null && launcher.getDragController().isDragging()) {
+                    com.android.launcher3.dragndrop.DragController dc = launcher.getDragController();
+                    if (dc != null && dc.isDragging()) {
                         android.util.Log.d("BaseLauncherBinder", "Deferring workspace bind because drag is active");
+                        dc.addDragListener(new com.android.launcher3.dragndrop.DragController.DragListener() {
+                            @Override
+                            public void onDragStart(com.android.launcher3.DropTarget.DragObject dragObject, com.android.launcher3.dragndrop.DragOptions options) {}
+
+                            @Override
+                            public void onDragEnd() {
+                                dc.removeDragListener(this);
+                                bindWorkspace(incrementBindId, isBindSync);
+                            }
+                        });
                         return;
                     }
                 }

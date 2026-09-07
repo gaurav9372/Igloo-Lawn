@@ -106,19 +106,18 @@ class LawnchairBackup(
             }
         }
 
-        // Close active Room DB connection if open
-        try {
-            AppDatabase.INSTANCE.get(context).close()
-        } catch (ignored: Throwable) {}
-
         // Clean up SQLite WAL & SHM files before file copy to prevent WAL journal corruption
-        context.getDatabasePath("preferences-wal").delete()
-        context.getDatabasePath("preferences-shm").delete()
-        context.getDatabasePath("launcher.db-wal").delete()
-        context.getDatabasePath("launcher.db-shm").delete()
-        context.getDatabasePath("restored.db-wal").delete()
-        context.getDatabasePath("restored.db-shm").delete()
-        context.getDatabasePath(LAUNCHER_DB_FILE_NAME).parentFile?.deleteRecursively()
+        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+            context.getDatabasePath("launcher.db").delete()
+            context.getDatabasePath("launcher.db-wal").delete()
+            context.getDatabasePath("launcher.db-shm").delete()
+            context.getDatabasePath("restored.db").delete()
+            context.getDatabasePath("restored.db-wal").delete()
+            context.getDatabasePath("restored.db-shm").delete()
+        }
+
+        // Safely reset Room database so subsequent category/folder restoration re-opens cleanly
+        AppDatabase.reset(context)
 
         DeviceGridState(info.gridState).writeToPrefs(context, true)
         readZip(handlers)

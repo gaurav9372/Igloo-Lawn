@@ -314,7 +314,13 @@ class LawnchairLauncher : QuickstepLauncher() {
 
         reloadIconsIfNeeded()
 
-        AppDatabase.INSTANCE.get(this).checkpointSync()
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                AppDatabase.INSTANCE.get(this@LawnchairLauncher).checkpoint()
+            } catch (t: Throwable) {
+                android.util.Log.w("LawnchairLauncher", "Background DB checkpoint failed", t)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
