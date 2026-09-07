@@ -49,6 +49,10 @@ class LawnchairAlphabeticalAppsList<T>(
     DefaultLifecycleObserver
     where T : Context, T : ActivityContext {
 
+    companion object {
+        const val RECENT_CATEGORY_ID = "-999"
+    }
+
     private var hiddenApps: Set<String> = setOf()
     private var categoriesAsAccordions: Boolean = false
     private val prefs2 = PreferenceManager2.getInstance(context)
@@ -119,8 +123,21 @@ class LawnchairAlphabeticalAppsList<T>(
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to initialize collapsedCategories", t)
         }
+        try {
+            prefs.drawerRecentApps.subscribeChanges {
+                onAppsUpdated()
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to initialize drawerRecentApps observer", t)
+        }
         observeFolders()
         observeCategories()
+    }
+
+    override fun onResume(owner: LifecycleOwner) {
+        if (prefs.drawerRecentApps.get()) {
+            onAppsUpdated()
+        }
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
@@ -220,6 +237,33 @@ class LawnchairAlphabeticalAppsList<T>(
         // hidden row into this adapter.
         val validApps = effectiveAppList.filterNotNull()
         val eligibleAppsByKey = validApps.associateBy { it.toComponentKey().toString() }
+
+        val showRecentApps = prefs.drawerRecentApps.get()
+        if (showRecentApps) {
+            val cols = com.android.launcher3.LauncherAppState.getIDP(context).numAllAppsColumns
+            val rawRecentApps = app.lawnchair.search.AppLaunchTracker.getRecentApps(context, cols)
+            val recentApps = rawRecentApps
+                .mapNotNull { eligibleAppsByKey[it.toComponentKey().toString()] }
+                .filterNot { hiddenApps.contains(it.toComponentKey().toString()) }
+
+            if (recentApps.isNotEmpty()) {
+                val headerItem = AdapterItem.asCategoryHeader("Recent").apply {
+                    categoryId = RECENT_CATEGORY_ID
+                    this.isAccordion = false
+                    this.isCollapsed = false
+                }
+                mAdapterItems.add(headerItem)
+                position++
+
+                recentApps.forEach { appInfo ->
+                    val item = AdapterItem.asApp(appInfo).apply {
+                        categoryId = RECENT_CATEGORY_ID
+                    }
+                    mAdapterItems.add(item)
+                    position++
+                }
+            }
+        }
 
         if (categoryList.isNotEmpty()) {
             val assignedAppKeys = mutableSetOf<String>()
@@ -476,7 +520,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
         mAdapterItems.forEach { item ->
             val catId = item.categoryId
-            if (!catId.isNullOrEmpty()) {
+            if (!catId.isNullOrEmpty() && catId != RECENT_CATEGORY_ID) {
                 if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
                     renderedCategoryIds.add(catId)
                 }
@@ -783,6 +827,7 @@ class LawnchairAlphabeticalAppsList<T>(
 
                 val existingIndex = mAdapterItems.indexOfFirst {
                     it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                        it.categoryId != RECENT_CATEGORY_ID &&
                         it.itemInfo?.toComponentKey()?.toString() == appKey
                 }
 
@@ -790,11 +835,11 @@ class LawnchairAlphabeticalAppsList<T>(
                 for (i in targetPos downTo 0) {
                     val item = mAdapterItems.getOrNull(i)
                     if (item != null) {
-                        if (!item.categoryId.isNullOrEmpty()) {
+                        if (!item.categoryId.isNullOrEmpty() && item.categoryId != RECENT_CATEGORY_ID) {
                             resolvedCatId = item.categoryId
                             break
                         }
-                        if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                        if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER && item.categoryId != RECENT_CATEGORY_ID) {
                             resolvedCatId = item.categoryId
                             if (resolvedCatId != null) break
                         }
@@ -808,6 +853,22 @@ class LawnchairAlphabeticalAppsList<T>(
                 } else {
                     targetPos
                 }
+
+                val lastRecentIndex = mAdapterItems.indexOfLast { it.categoryId == RECENT_CATEGORY_ID }
+                val minAllowedPos = if (lastRecentIndex != -1) {
+                    val firstCategoryHeaderIndex = mAdapterItems.indexOfFirst {
+                        it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER &&
+                            it.categoryId != RECENT_CATEGORY_ID
+                    }
+                    if (firstCategoryHeaderIndex != -1) {
+                        firstCategoryHeaderIndex + 1
+                    } else {
+                        lastRecentIndex + 1
+                    }
+                } else {
+                    0
+                }
+                if (effectivePos < minAllowedPos) return@safeNotifyAdapter
 
                 if (existingIndex == -1) {
                     val newItem = AdapterItem.asApp(appInfo).apply {
@@ -834,7 +895,27 @@ class LawnchairAlphabeticalAppsList<T>(
         val draggedAppKey = appInfo.toComponentKey().toString()
         val targetPos = mAdapterItems.indexOfFirst {
             it.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON &&
+                it.categoryId != RECENT_CATEGORY_ID &&
                 it.itemInfo?.toComponentKey()?.toString() == draggedAppKey
+        }
+
+        val lastRecentIndex = mAdapterItems.indexOfLast { it.categoryId == RECENT_CATEGORY_ID }
+        val minAllowedPos = if (lastRecentIndex != -1) {
+            val firstCategoryHeaderIndex = mAdapterItems.indexOfFirst {
+                it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER &&
+                    it.categoryId != RECENT_CATEGORY_ID
+            }
+            if (firstCategoryHeaderIndex != -1) {
+                firstCategoryHeaderIndex + 1
+            } else {
+                lastRecentIndex + 1
+            }
+        } else {
+            0
+        }
+        if (targetPos != -1 && targetPos < minAllowedPos) {
+            onAppDragCancelledFromFolder()
+            return
         }
 
         var dropCatId: String? = null
@@ -842,11 +923,11 @@ class LawnchairAlphabeticalAppsList<T>(
             for (i in targetPos downTo 0) {
                 val item = mAdapterItems.getOrNull(i)
                 if (item != null) {
-                    if (!item.categoryId.isNullOrEmpty()) {
+                    if (!item.categoryId.isNullOrEmpty() && item.categoryId != RECENT_CATEGORY_ID) {
                         dropCatId = item.categoryId
                         break
                     }
-                    if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                    if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER && item.categoryId != RECENT_CATEGORY_ID) {
                         dropCatId = item.categoryId
                         if (dropCatId != null) break
                     }
@@ -885,11 +966,18 @@ class LawnchairAlphabeticalAppsList<T>(
         }
     }
 
+    private var recentAppsDecorator: app.lawnchair.allapps.views.RecentAppsSectionDecorator? = null
+
     fun setupCategoryTouchHelper(recyclerView: androidx.recyclerview.widget.RecyclerView) {
         val callback = AllAppsCategoryTouchHelperCallback(this)
         val helper = androidx.recyclerview.widget.ItemTouchHelper(callback)
         helper.attachToRecyclerView(recyclerView)
         itemTouchHelper = helper
+
+        recentAppsDecorator?.let { recyclerView.removeItemDecoration(it) }
+        val decorator = app.lawnchair.allapps.views.RecentAppsSectionDecorator(this)
+        recentAppsDecorator = decorator
+        recyclerView.addItemDecoration(decorator)
     }
 
     private var appsUpdateRunnable: Runnable? = null

@@ -85,10 +85,6 @@ fun DrawerSearchPreference(
         val navController = LocalNavController.current
         PreferenceGroup(heading = stringResource(id = R.string.show_search_result_types)) {
             SwitchPreference(
-                adapter = prefs.searchResultRecentApps.getAdapter(),
-                label = "Recent apps",
-            )
-            SwitchPreference(
                 adapter = prefs.searchResultFrequentApps.getAdapter(),
                 label = "Frequent apps",
             )

@@ -89,6 +89,10 @@ fun AppDrawerPreferences(
                 subtitle = resources.getQuantityString(R.plurals.apps_count, hiddenApps.size, hiddenApps.size),
             )
             SearchBarPreference(SearchRoute.DRAWER_SEARCH, showLabel = false)
+            SwitchPreference(
+                adapter = prefs.drawerRecentApps.getAdapter(),
+                label = "Recent apps",
+            )
             SuggestionsPreference()
             AppDrawerHapticFeedbackPreference()
         }

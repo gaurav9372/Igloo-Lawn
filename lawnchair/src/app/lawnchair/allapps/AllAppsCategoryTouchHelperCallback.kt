@@ -82,6 +82,9 @@ class AllAppsCategoryTouchHelperCallback(
         val items = list.adapterItems
         if (pos in items.indices) {
             val item = items[pos]
+            if (item.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID) {
+                return makeMovementFlags(0, 0)
+            }
             if (item.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON || item.viewType == BaseAllAppsAdapter.VIEW_TYPE_FOLDER) {
                 val dragFlags = ItemTouchHelper.UP or ItemTouchHelper.DOWN or
                     ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
@@ -127,6 +130,46 @@ class AllAppsCategoryTouchHelperCallback(
         }
     }
 
+    override fun canDropOver(
+        recyclerView: RecyclerView,
+        current: RecyclerView.ViewHolder,
+        target: RecyclerView.ViewHolder,
+    ): Boolean {
+        val targetPos = target.bindingAdapterPosition
+        val currentPos = current.bindingAdapterPosition
+        val items = list.adapterItems
+
+        if (targetPos !in items.indices || currentPos !in items.indices) return false
+
+        val currentItem = items[currentPos]
+        val targetItem = items[targetPos]
+
+        // Never allow dragging or dropping recent apps
+        if (currentItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID ||
+            targetItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID
+        ) {
+            return false
+        }
+
+        val lastRecentIndex = items.indexOfLast { it.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID }
+        if (lastRecentIndex != -1) {
+            val firstCategoryHeaderIndex = items.indexOfFirst {
+                it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER &&
+                    it.categoryId != LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID
+            }
+            val minAllowedPos = if (firstCategoryHeaderIndex != -1) {
+                firstCategoryHeaderIndex + 1
+            } else {
+                lastRecentIndex + 1
+            }
+            if (targetPos < minAllowedPos) {
+                return false
+            }
+        }
+
+        return super.canDropOver(recyclerView, current, target)
+    }
+
     override fun onMove(
         recyclerView: RecyclerView,
         viewHolder: RecyclerView.ViewHolder,
@@ -146,6 +189,32 @@ class AllAppsCategoryTouchHelperCallback(
 
         // When actively hovering over another icon/folder center to create/add to folder, pause item shifting
         if (activeHoverHolder != null) {
+            return false
+        }
+
+        // Do not allow dragging recent apps or dragging items into the recent apps section
+        if (fromItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID ||
+            toItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID
+        ) {
+            return false
+        }
+
+        val lastRecentIndex = items.indexOfLast { it.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID }
+        val minAllowedPos = if (lastRecentIndex != -1) {
+            val firstCategoryHeaderIndex = items.indexOfFirst {
+                it.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER &&
+                    it.categoryId != LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID
+            }
+            if (firstCategoryHeaderIndex != -1) {
+                firstCategoryHeaderIndex + 1
+            } else {
+                lastRecentIndex + 1
+            }
+        } else {
+            0
+        }
+
+        if (toPos < minAllowedPos) {
             return false
         }
 
@@ -173,16 +242,34 @@ class AllAppsCategoryTouchHelperCallback(
                 return false
             }
 
-            // A category header is itself a drop target. Resolving an upward drop to the
-            // preceding header sends items past collapsed categories because they have no
-            // rendered children to target instead.
             val targetCatId = toItem.categoryId ?: NO_CATEGORY_ID
             fromItem.categoryId = targetCatId
 
+            // If toItem is a category header:
+            // - Dragging UP onto a category header places the item right AFTER the header (toPos + 1).
+            //   If the item is already at toPos + 1, it cannot move higher within this category.
+            // - Dragging DOWN onto a category header places the item right AFTER the header.
+            val effectiveToPos = if (toItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
+                if (fromPos > toPos) {
+                    if (fromPos == toPos + 1) {
+                        return false
+                    }
+                    toPos + 1
+                } else {
+                    toPos
+                }
+            } else {
+                toPos
+            }
+
+            if (effectiveToPos < minAllowedPos) {
+                return false
+            }
+
             try {
-                if (fromPos in items.indices && toPos in items.indices) {
+                if (fromPos in items.indices && effectiveToPos in items.indices && fromPos != effectiveToPos) {
                     items.removeAt(fromPos)
-                    val safeToPos = toPos.coerceAtMost(items.size)
+                    val safeToPos = effectiveToPos.coerceAtMost(items.size)
                     items.add(safeToPos, fromItem)
                     recyclerView.adapter?.notifyItemMoved(fromPos, safeToPos)
                     return true
@@ -244,6 +331,7 @@ class AllAppsCategoryTouchHelperCallback(
             val pos = childHolder.bindingAdapterPosition
             if (pos !in items.indices) continue
             val item = items[pos]
+            if (item.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID) continue
             if (item.viewType != BaseAllAppsAdapter.VIEW_TYPE_ICON && item.viewType != BaseAllAppsAdapter.VIEW_TYPE_FOLDER) continue
 
             val targetCx = child.left + child.translationX + child.width / 2f
@@ -333,7 +421,11 @@ class AllAppsCategoryTouchHelperCallback(
         initialDraggedItem = null
 
         if (targetItem != null && draggedItem != null && targetItem != draggedItem) {
-            if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
+            if (draggedItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID ||
+                targetItem.categoryId == LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID
+            ) {
+                // Ignore folder operations involving recent apps
+            } else if (draggedItem.viewType == BaseAllAppsAdapter.VIEW_TYPE_ICON) {
                 val draggedAppKey = draggedItem.itemInfo?.toComponentKey()?.toString()
                 val targetCategoryId = targetItem.categoryId
 

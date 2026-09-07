@@ -16,7 +16,6 @@ import app.lawnchair.search.algorithms.engine.FilesSectionBuilder
 import app.lawnchair.search.algorithms.engine.HistorySectionBuilder
 import app.lawnchair.search.AppLaunchTracker
 import app.lawnchair.search.algorithms.engine.FrequentAppsSectionBuilder
-import app.lawnchair.search.algorithms.engine.RecentAppsSectionBuilder
 import app.lawnchair.search.algorithms.engine.SearchProvider
 import app.lawnchair.search.algorithms.engine.SearchResult
 import app.lawnchair.search.algorithms.engine.SearchSettingsSectionBuilder
@@ -98,20 +97,13 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
 
         val prefs = PreferenceManager.getInstance(context)
         val historyEnabled = prefs.searchResulRecentSuggestion.get()
-        val showRecentApps = prefs.searchResultRecentApps.get()
         val showFrequentApps = prefs.searchResultFrequentApps.get()
 
         val cols = com.android.launcher3.LauncherAppState.getIDP(context).numAllAppsColumns
-        val recentCount = cols * 2
         val frequentCount = cols
 
         currentJob = coroutineScope.launch {
             val resultsToTranslate = mutableListOf<SearchResult>()
-
-            if (showRecentApps) {
-                val recentApps = AppLaunchTracker.getRecentApps(context, recentCount)
-                recentApps.forEach { resultsToTranslate.add(SearchResult.RecentApp(it)) }
-            }
 
             if (showFrequentApps) {
                 val frequentApps = AppLaunchTracker.getFrequentApps(context, frequentCount)
@@ -185,7 +177,6 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
     }
 
     private val sectionBuilders: List<SectionBuilder> = listOf(
-        RecentAppsSectionBuilder,
         FrequentAppsSectionBuilder,
         AppsAndShortcutsSectionBuilder,
         CalculationSectionBuilder,
