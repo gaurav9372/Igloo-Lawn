@@ -41,10 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.lawnchair.data.category.CategoryAppCountHelper
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
+import app.lawnchair.data.folder.FolderEntry
+import app.lawnchair.data.folder.model.FolderViewModel
+import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences2.PreferenceManager2
-import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.appsState
 import app.lawnchair.ui.ModalBottomSheetContent
 import app.lawnchair.ui.preferences.LocalNavController
@@ -64,13 +67,16 @@ import com.android.launcher3.R
 fun AppDrawerCategoriesPreference(
     modifier: Modifier = Modifier,
     viewModel: CategoryViewModel = viewModel(),
+    folderViewModel: FolderViewModel = viewModel(),
 ) {
     val navController = LocalNavController.current
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val folders by folderViewModel.folders.collectAsStateWithLifecycle()
 
     AppDrawerCategoriesPreference(
         modifier = modifier,
         categories = categories,
+        folders = folders,
         onCreateCategory = { label ->
             viewModel.createCategory(label)
         },
@@ -89,12 +95,13 @@ fun AppDrawerCategoriesPreference(
     )
 }
 
-const val NO_CATEGORY_ID = -100
+const val NO_CATEGORY_ID = CategoryAppCountHelper.NO_CATEGORY_ID
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppDrawerCategoriesPreference(
     categories: List<CategoryEntry>?,
+    folders: List<FolderEntry>? = null,
     onCreateCategory: (String) -> Unit,
     onOpenCategoryDetail: (Int) -> Unit,
     onRenameCategory: (Int, String) -> Unit,
@@ -105,27 +112,37 @@ fun AppDrawerCategoriesPreference(
     val context = LocalContext.current
     val prefs2 = remember { PreferenceManager2.getInstance(context) }
     val apps by appsState()
+    val hiddenApps by prefs2.hiddenApps.getAdapter().state
+    val orderString by prefs2.categoryOrder.getAdapter().state
     val bottomSheetHandler = bottomSheetHandler
 
     val mainProfileApps = remember(apps) {
         apps.filter { it.key.user == android.os.Process.myUserHandle() }
     }
-    val hiddenApps = prefs2.hiddenApps.firstCached()
-    val claimedKeys = remember(categories) {
-        categories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
+    val eligibleAppKeys = remember(mainProfileApps, hiddenApps) {
+        CategoryAppCountHelper.getEligibleAppKeys(
+            mainProfileApps.map { it.key.toString() },
+            hiddenApps,
+        )
     }
-    val unassignedKeys = remember(mainProfileApps, claimedKeys, hiddenApps) {
-        mainProfileApps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
+    val allUserClaimedKeys = remember(categories, folders) {
+        CategoryAppCountHelper.getAllUserClaimedKeys(categories, folders)
+    }
+    val unassignedKeys = remember(eligibleAppKeys, allUserClaimedKeys) {
+        CategoryAppCountHelper.getUnassignedKeys(eligibleAppKeys, allUserClaimedKeys)
     }
     val noCategoryEntry = remember(unassignedKeys) {
         CategoryEntry(id = NO_CATEGORY_ID, title = "No Category", itemComponentKeys = unassignedKeys)
     }
 
-    val displayList = remember(categories, noCategoryEntry) {
+    val categoryCounts = remember(categories, folders, eligibleAppKeys, unassignedKeys) {
+        CategoryAppCountHelper.computeCategoryCounts(categories, folders, eligibleAppKeys, unassignedKeys)
+    }
+
+    val displayList = remember(categories, noCategoryEntry, orderString) {
         if (categories == null) emptyList()
         else {
             val allList = categories + noCategoryEntry
-            val orderString = prefs2.categoryOrder.firstCached()
             if (orderString.isBlank()) {
                 allList
             } else {
@@ -140,7 +157,7 @@ fun AppDrawerCategoriesPreference(
     var categoryToDeletePending by remember { mutableStateOf<CategoryEntry?>(null) }
 
     LoadingScreen(
-        isLoading = categories == null,
+        isLoading = categories == null || folders == null,
         modifier = modifier.fillMaxWidth(),
     ) {
         PreferenceLayout(
@@ -186,6 +203,7 @@ fun AppDrawerCategoriesPreference(
                 val interactionSource = remember { MutableInteractionSource() }
                 CategoryItem(
                     categoryEntry = categoryEntry,
+                    appCount = categoryCounts[categoryEntry.id] ?: 0,
                     onItemClick = {
                         onOpenCategoryDetail(categoryEntry.id)
                     },
@@ -194,7 +212,7 @@ fun AppDrawerCategoriesPreference(
                             CategoryEditSheet(
                                 categoryId = categoryToEdit.id,
                                 initialTitle = categoryToEdit.title,
-                                itemCount = categoryToEdit.itemComponentKeys.size,
+                                itemCount = categoryCounts[categoryToEdit.id] ?: categoryToEdit.itemComponentKeys.size,
                                 onRename = { id, title -> onRenameCategory(id, title) },
                                 onNavigate = {},
                                 onDismiss = {
@@ -224,6 +242,7 @@ fun AppDrawerCategoriesPreference(
     }
 
     categoryToDeletePending?.let { category ->
+        val deleteCount = categoryCounts[category.id] ?: category.itemComponentKeys.size
         AlertDialog(
             onDismissRequest = { categoryToDeletePending = null },
             title = {
@@ -234,7 +253,7 @@ fun AppDrawerCategoriesPreference(
                     text = stringResource(
                         id = R.string.delete_category_confirmation,
                         category.title,
-                        category.itemComponentKeys.size,
+                        deleteCount,
                     ),
                 )
             },
@@ -345,6 +364,7 @@ fun CategoryItem(
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     dragIndicator: @Composable () -> Unit = {},
+    appCount: Int = categoryEntry.itemComponentKeys.size,
 ) {
     val resources = LocalResources.current
     var showMenu by remember { mutableStateOf(false) }
@@ -360,8 +380,8 @@ fun CategoryItem(
             Text(
                 text = resources.getQuantityString(
                     R.plurals.apps_count,
-                    categoryEntry.itemComponentKeys.size,
-                    categoryEntry.itemComponentKeys.size,
+                    appCount,
+                    appCount,
                 ),
             )
         },

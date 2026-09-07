@@ -43,15 +43,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.lawnchair.data.category.CategoryAppCountHelper
 import app.lawnchair.data.category.CategoryEntry
 import app.lawnchair.data.category.model.CategoryViewModel
+import app.lawnchair.data.folder.model.FolderViewModel
+import app.lawnchair.preferences.getAdapter
+import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.ui.preferences.components.AppItem
 import app.lawnchair.ui.preferences.components.layout.LoadingScreen
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
 import androidx.compose.ui.platform.LocalContext
-import app.lawnchair.preferences2.PreferenceManager2
-import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.App
 import app.lawnchair.util.appsState
 import com.android.launcher3.R
@@ -61,6 +63,7 @@ fun CategoryDetailPreference(
     categoryInfoId: Int?,
     modifier: Modifier = Modifier,
     viewModel: CategoryViewModel = viewModel(),
+    folderViewModel: FolderViewModel = viewModel(),
 ) {
     if (categoryInfoId == null) {
         val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
@@ -69,17 +72,23 @@ fun CategoryDetailPreference(
     }
 
     val context = LocalContext.current
-    val hiddenApps = PreferenceManager2.getInstance(context).hiddenApps.firstCached()
+    val prefs2 = remember { PreferenceManager2.getInstance(context) }
+    val hiddenApps by prefs2.hiddenApps.getAdapter().state
     val categoryEntryState by viewModel.getCategoryFlowForId(categoryInfoId).collectAsStateWithLifecycle(null)
     val allCategories by viewModel.categories.collectAsStateWithLifecycle()
+    val folders by folderViewModel.folders.collectAsStateWithLifecycle()
     val apps by appsState()
 
-    val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, apps, hiddenApps) {
-        if (categoryInfoId == -100) {
+    val categoryEntry = remember(categoryInfoId, categoryEntryState, allCategories, folders, apps, hiddenApps) {
+        if (categoryInfoId == CategoryAppCountHelper.NO_CATEGORY_ID) {
             val mainProfileApps = apps.filter { it.key.user == android.os.Process.myUserHandle() }
-            val claimedKeys = allCategories?.flatMap { it.itemComponentKeys }?.toSet() ?: emptySet()
-            val unassignedKeys = mainProfileApps.map { it.key.toString() }.filterNot { claimedKeys.contains(it) || hiddenApps.contains(it) }
-            CategoryEntry(id = -100, title = "No Category", itemComponentKeys = unassignedKeys)
+            val eligibleAppKeys = CategoryAppCountHelper.getEligibleAppKeys(
+                mainProfileApps.map { it.key.toString() },
+                hiddenApps,
+            )
+            val allUserClaimedKeys = CategoryAppCountHelper.getAllUserClaimedKeys(allCategories, folders)
+            val unassignedKeys = CategoryAppCountHelper.getUnassignedKeys(eligibleAppKeys, allUserClaimedKeys)
+            CategoryEntry(id = CategoryAppCountHelper.NO_CATEGORY_ID, title = "No Category", itemComponentKeys = unassignedKeys)
         } else {
             categoryEntryState
         }
@@ -143,15 +152,17 @@ fun CategoryDetailPreference(
     ) {
         Scaffold(
             floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { showAppPickerModal = true },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Add Apps",
-                    )
+                if (currentEntry?.id != CategoryAppCountHelper.NO_CATEGORY_ID) {
+                    FloatingActionButton(
+                        onClick = { showAppPickerModal = true },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add Apps",
+                        )
+                    }
                 }
             },
         ) { paddingValues ->
@@ -196,20 +207,22 @@ fun CategoryDetailPreference(
                                     app = app,
                                     onClick = {},
                                     endWidget = {
-                                        IconButton(
-                                            onClick = {
-                                                val cat = categoryEntry ?: return@IconButton
-                                                val updatedKeys = cat.itemComponentKeys
-                                                    .filter { it != app.key.toString() }
-                                                onUpdateCategoryItems(cat.title, updatedKeys)
-                                            },
-                                            shapes = IconButtonDefaults.shapes(),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Delete,
-                                                contentDescription = "Remove App",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
+                                        if (currentEntry?.id != CategoryAppCountHelper.NO_CATEGORY_ID) {
+                                            IconButton(
+                                                onClick = {
+                                                    val cat = categoryEntry ?: return@IconButton
+                                                    val updatedKeys = cat.itemComponentKeys
+                                                        .filter { it != app.key.toString() }
+                                                    onUpdateCategoryItems(cat.title, updatedKeys)
+                                                },
+                                                shapes = IconButtonDefaults.shapes(),
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Delete,
+                                                    contentDescription = "Remove App",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
                                         }
                                     },
                                 )
