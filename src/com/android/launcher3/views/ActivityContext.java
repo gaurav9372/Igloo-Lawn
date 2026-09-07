@@ -487,15 +487,23 @@ public interface ActivityContext extends SavedStateRegistryOwner {
                 // Could be launching some bookkeeping activity
                 context.startActivity(intent, optsBundle);
             } else {
-                context.getSystemService(LauncherApps.class).startMainActivity(
-                        intent.getComponent(), user, intent.getSourceBounds(), optsBundle);
+                ComponentName component = intent.getComponent();
+                if (component == null) {
+                    component = intent.resolveActivity(context.getPackageManager());
+                }
+                if (component != null) {
+                    context.getSystemService(LauncherApps.class).startMainActivity(
+                            component, user, intent.getSourceBounds(), optsBundle);
+                } else {
+                    context.startActivity(intent, optsBundle);
+                }
             }
             if (item != null) {
                 InstanceId instanceId = new InstanceIdSequence().newInstanceId();
                 logAppLaunch(getStatsLogManager(), item, instanceId);
             }
             return options.onEndCallback;
-        } catch (NullPointerException | ActivityNotFoundException | SecurityException e) {
+        } catch (Exception e) {
             Toast.makeText(context, R.string.activity_not_found, Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Unable to launch. tag=" + item + " intent=" + intent, e);
         }

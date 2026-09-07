@@ -21,6 +21,7 @@ import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
 import android.os.Process;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -217,8 +218,9 @@ public class UserCache {
      */
     @Nullable
     public static UserBadgeDrawable getBadgeDrawable(Context context, UserHandle userHandle) {
-        return (UserBadgeDrawable) BitmapInfo.LOW_RES_INFO.withFlags(UserCache.getInstance(context)
+        Drawable badge = BitmapInfo.LOW_RES_INFO.withFlags(UserCache.getInstance(context)
                         .getUserInfo(userHandle).applyBitmapInfoFlags(FlagOp.NO_OP))
                 .getBadgeDrawable(context, false /* isThemed */, null);
+        return badge instanceof UserBadgeDrawable ? (UserBadgeDrawable) badge : null;
     }
 }

@@ -546,6 +546,10 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun getActivityLaunchOptions(v: View?, item: ItemInfo?): ActivityOptionsWrapper {
+        val user = item?.user
+        if (user != null && user != android.os.Process.myUserHandle()) {
+            return getActivityLaunchOptionsDefault(v)
+        }
         return runCatching {
             super.getActivityLaunchOptions(v, item)
         }.getOrElse {
@@ -556,8 +560,8 @@ class LawnchairLauncher : QuickstepLauncher() {
     private fun getActivityLaunchOptionsDefault(v: View?): ActivityOptionsWrapper {
         var left = 0
         var top = 0
-        var width = v!!.measuredWidth
-        var height = v.measuredHeight
+        var width = v?.measuredWidth ?: 0
+        var height = v?.measuredHeight ?: 0
         if (v is BubbleTextView) {
             // Launch from center of icon, not entire view
             val icon: Drawable? = v.icon
@@ -570,18 +574,22 @@ class LawnchairLauncher : QuickstepLauncher() {
             }
         }
         val options = Utilities.allowBGLaunch(
-            ActivityOptions.makeClipRevealAnimation(
-                v,
-                left,
-                top,
-                width,
-                height,
-            ),
+            if (v != null && width > 0 && height > 0) {
+                ActivityOptions.makeClipRevealAnimation(
+                    v,
+                    left,
+                    top,
+                    width,
+                    height,
+                )
+            } else {
+                ActivityOptions.makeBasic()
+            },
         )
         if (Utilities.ATLEAST_T) {
             options.splashScreenStyle = SplashScreen.SPLASH_SCREEN_STYLE_ICON
         }
-        options.launchDisplayId = if (v.display != null) v.display.displayId else Display.DEFAULT_DISPLAY
+        options.launchDisplayId = if (v?.display != null) v.display.displayId else Display.DEFAULT_DISPLAY
         val callback = RunnableList()
         return ActivityOptionsWrapper(options, callback)
     }

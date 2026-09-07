@@ -405,9 +405,13 @@ public class ItemClickHandler {
         if (item instanceof ItemInfoWithIcon itemInfoWithIcon) {
             if ((itemInfoWithIcon.runtimeStatusFlags
                     & ItemInfoWithIcon.FLAG_INSTALL_SESSION_ACTIVE) != 0) {
-                intent = ApiWrapper.INSTANCE.get(launcher).getAppMarketActivityIntent(
-                        itemInfoWithIcon.getTargetComponent().getPackageName(),
-                        Process.myUserHandle());
+                String pkg = itemInfoWithIcon.getTargetComponent() != null
+                        ? itemInfoWithIcon.getTargetComponent().getPackageName()
+                        : itemInfoWithIcon.getTargetPackage();
+                if (pkg != null) {
+                    intent = ApiWrapper.INSTANCE.get(launcher).getAppMarketActivityIntent(
+                            pkg, Process.myUserHandle());
+                }
             } else if (itemInfoWithIcon.itemType
                     == LauncherSettings.Favorites.ITEM_TYPE_PRIVATE_SPACE_INSTALL_APP_BUTTON) {
                 intent = ApiWrapper.INSTANCE.get(launcher).getAppMarketActivityIntent(

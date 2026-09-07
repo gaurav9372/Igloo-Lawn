@@ -332,14 +332,39 @@ public class FloatingIconView extends FrameLayout implements
             }
         }
 
-        drawable = drawable == null ? null : Objects.requireNonNull(drawable.getConstantState()).newDrawable();
+        Drawable safeDrawable = null;
+        if (drawable != null) {
+            Drawable.ConstantState cs = null;
+            try {
+                cs = drawable.getConstantState();
+            } catch (Throwable ignored) {
+            }
+            try {
+                safeDrawable = cs != null ? cs.newDrawable() : drawable;
+            } catch (Throwable ignored) {
+                safeDrawable = drawable;
+            }
+        }
+        drawable = safeDrawable;
         int iconOffset = getOffsetForIconBounds(l, drawable, pos);
         // Clone right away as we are on the background thread instead of blocking the
         // main thread later
-        Drawable btvClone = btvIcon == null ? null : Objects.requireNonNull(
-            btvIcon.getConstantState()).newDrawable();
+        Drawable btvClone = null;
+        if (btvIcon != null) {
+            Drawable.ConstantState cs = null;
+            try {
+                cs = btvIcon.getConstantState();
+            } catch (Throwable ignored) {
+            }
+            try {
+                btvClone = cs != null ? cs.newDrawable() : btvIcon;
+            } catch (Throwable ignored) {
+                btvClone = btvIcon;
+            }
+        }
+        final Drawable finalBtvClone = btvClone;
         synchronized (outIconLoadResult) {
-            outIconLoadResult.btvDrawable = () -> btvClone;
+            outIconLoadResult.btvDrawable = () -> finalBtvClone;
             outIconLoadResult.drawable = drawable;
             outIconLoadResult.badge = badge;
             outIconLoadResult.iconOffset = iconOffset;
@@ -570,8 +595,15 @@ public class FloatingIconView extends FrameLayout implements
                 btvDrawableSupplier = () -> btvIcon;
             } else {
                 btvIcon = btv.getIcon();
-                // Clone when needed
-                btvDrawableSupplier = () -> btvIcon.getConstantState().newDrawable();
+                btvDrawableSupplier = () -> {
+                    if (btvIcon == null) return null;
+                    try {
+                        Drawable.ConstantState cs = btvIcon.getConstantState();
+                        return cs != null ? cs.newDrawable() : btvIcon;
+                    } catch (Throwable ignored) {
+                        return btvIcon;
+                    }
+                };
             }
         } else {
             btvIcon = null;

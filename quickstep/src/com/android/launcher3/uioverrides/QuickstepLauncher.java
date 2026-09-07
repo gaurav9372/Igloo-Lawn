@@ -437,15 +437,26 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
 
     @Override
     public RunnableList startActivitySafely(View v, Intent intent, ItemInfo item) {
-        PredictionRowView<?> predictionRowView =
-                getAppsView().getFloatingHeaderView().findFixedRowByType(PredictionRowView.class);
-        // Pause the prediction row updates until the transition (if it exists) ends.
-        predictionRowView.setPredictionUiUpdatePaused(true);
+        PredictionRowView<?> predictionRowView = null;
+        try {
+            if (getAppsView() != null && getAppsView().getFloatingHeaderView() != null) {
+                predictionRowView =
+                        getAppsView().getFloatingHeaderView().findFixedRowByType(PredictionRowView.class);
+            }
+        } catch (Exception ignored) {
+        }
+        if (predictionRowView != null) {
+            // Pause the prediction row updates until the transition (if it exists) ends.
+            predictionRowView.setPredictionUiUpdatePaused(true);
+        }
         RunnableList result = super.startActivitySafely(v, intent, item);
-        if (result == null) {
-            predictionRowView.setPredictionUiUpdatePaused(false);
-        } else {
-            result.add(() -> predictionRowView.setPredictionUiUpdatePaused(false));
+        if (predictionRowView != null) {
+            final PredictionRowView<?> row = predictionRowView;
+            if (result == null) {
+                row.setPredictionUiUpdatePaused(false);
+            } else {
+                result.add(() -> row.setPredictionUiUpdatePaused(false));
+            }
         }
         return result;
     }
@@ -588,8 +599,12 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
         switch (info.id) {
             case Favorites.CONTAINER_ALL_APPS_PREDICTION:
                 mAllAppsPredictions = info;
-                getAppsView().getFloatingHeaderView().findFixedRowByType(
-                        PredictionRowView.class).setPredictedApps(info.getContents());
+                PredictionRowView<?> predictionRow = getAppsView() != null && getAppsView().getFloatingHeaderView() != null
+                        ? getAppsView().getFloatingHeaderView().findFixedRowByType(PredictionRowView.class)
+                        : null;
+                if (predictionRow != null) {
+                    predictionRow.setPredictedApps(info.getContents());
+                }
                 break;
             case Favorites.CONTAINER_HOTSEAT_PREDICTION:
                 mHotseatPredictionController.setPredictedItems(info);
@@ -1611,10 +1626,12 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer,
         if (mHotseatPredictionController != null) {
             mHotseatPredictionController.dump(prefix, writer);
         }
-        PredictionRowView<?> predictionRowView =
-                getAppsView().getFloatingHeaderView().findFixedRowByType(
-                        PredictionRowView.class);
-        predictionRowView.dump(prefix, writer);
+        PredictionRowView<?> predictionRowView = getAppsView() != null && getAppsView().getFloatingHeaderView() != null
+                ? getAppsView().getFloatingHeaderView().findFixedRowByType(PredictionRowView.class)
+                : null;
+        if (predictionRowView != null) {
+            predictionRowView.dump(prefix, writer);
+        }
     }
 
     /**
