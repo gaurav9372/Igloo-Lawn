@@ -235,6 +235,20 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         return icon;
     }
 
+    /**
+     * Updates an existing FolderIcon in-place with new FolderInfo without tearing down
+     * or recreating the view hierarchy.
+     */
+    public void bind(FolderInfo folderInfo) {
+        mInfo = folderInfo;
+        setTag(folderInfo);
+        onTitleChanged(folderInfo.title);
+        onItemsChanged(false);
+        if (mFolder != null) {
+            mFolder.bind(folderInfo);
+        }
+    }
+
     public void animateBgShadowAndStroke() {
         mBackground.fadeInBackgroundShadow();
         mBackground.animateBackgroundStroke();

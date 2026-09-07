@@ -194,6 +194,9 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 if (folderInfo == null || other.folderInfo == null) {
                     return false;
                 }
+                if (!java.util.Objects.equals(categoryId, other.categoryId)) {
+                    return false;
+                }
                 if (folderInfo.id != ItemInfo.NO_ID || other.folderInfo.id != ItemInfo.NO_ID) {
                     return folderInfo.id == other.folderInfo.id;
                 }
@@ -223,10 +226,83 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                         && isAccordion == other.isAccordion
                         && isCollapsed == other.isCollapsed;
             }
-            if (viewType == VIEW_TYPE_ICON || viewType == VIEW_TYPE_FOLDER) {
-                return false;
+            if (viewType == VIEW_TYPE_FOLDER) {
+                return java.util.Objects.equals(categoryId, other.categoryId)
+                        && areFolderContentsSame(folderInfo, other.folderInfo);
+            }
+            if (viewType == VIEW_TYPE_ICON) {
+                return java.util.Objects.equals(categoryId, other.categoryId)
+                        && areAppContentsSame(itemInfo, other.itemInfo);
             }
             return itemInfo == null && other.itemInfo == null;
+        }
+
+        private static boolean areAppContentsSame(@Nullable AppInfo a, @Nullable AppInfo b) {
+            if (a == b) {
+                return true;
+            }
+            if (a == null || b == null) {
+                return false;
+            }
+            if (!java.util.Objects.equals(a.componentName, b.componentName)) {
+                return false;
+            }
+            if (!java.util.Objects.equals(a.user, b.user)) {
+                return false;
+            }
+            if (!java.util.Objects.equals(a.title, b.title)) {
+                return false;
+            }
+            if (a.bitmap != b.bitmap) {
+                return false;
+            }
+            if (a.runtimeStatusFlags != b.runtimeStatusFlags) {
+                return false;
+            }
+            return true;
+        }
+
+        private static boolean areFolderContentsSame(@Nullable FolderInfo a, @Nullable FolderInfo b) {
+            if (a == b) {
+                return true;
+            }
+            if (a == null || b == null) {
+                return false;
+            }
+            if (a.id != b.id) {
+                return false;
+            }
+            if (!java.util.Objects.equals(a.title, b.title)) {
+                return false;
+            }
+            java.util.List<ItemInfo> aContents = a.getContents();
+            java.util.List<ItemInfo> bContents = b.getContents();
+            if (aContents.size() != bContents.size()) {
+                return false;
+            }
+            for (int i = 0; i < aContents.size(); i++) {
+                ItemInfo itemA = aContents.get(i);
+                ItemInfo itemB = bContents.get(i);
+                if (itemA == itemB) {
+                    continue;
+                }
+                if (itemA == null || itemB == null) {
+                    return false;
+                }
+                if (itemA.id != itemB.id) {
+                    return false;
+                }
+                if (!java.util.Objects.equals(itemA.getTargetComponent(), itemB.getTargetComponent())) {
+                    return false;
+                }
+                if (!java.util.Objects.equals(itemA.user, itemB.user)) {
+                    return false;
+                }
+                if (!java.util.Objects.equals(itemA.title, itemB.title)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @Nullable
@@ -590,12 +666,24 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 // LC: Caddy/Folder in allapps 86b2b025a4f23a068818274020f37ad6d5268363
                 FolderInfo folderInfo = mApps.getAdapterItems().get(position).folderInfo;
                 ViewGroup container = (ViewGroup) holder.itemView;
-                container.removeAllViews();
-                com.android.launcher3.folder.FolderIcon folderIcon =
-                    FolderIcon.inflateFolderAndIcon(R.layout.all_apps_folder_icon, mActivityContext,
-                    container, folderInfo);
-                folderIcon.setOnLongClickListener(mOnIconLongClickListener);
-                container.addView(folderIcon);
+                com.android.launcher3.folder.FolderIcon folderIcon = null;
+                if (container.getChildCount() > 0 && container.getChildAt(0) instanceof com.android.launcher3.folder.FolderIcon) {
+                    com.android.launcher3.folder.FolderIcon existingIcon =
+                            (com.android.launcher3.folder.FolderIcon) container.getChildAt(0);
+                    if (existingIcon.mInfo != null && folderInfo != null && existingIcon.mInfo.id == folderInfo.id) {
+                        folderIcon = existingIcon;
+                    }
+                }
+                if (folderIcon == null) {
+                    container.removeAllViews();
+                    folderIcon = FolderIcon.inflateFolderAndIcon(R.layout.all_apps_folder_icon, mActivityContext,
+                            container, folderInfo);
+                    folderIcon.setOnLongClickListener(mOnIconLongClickListener);
+                    container.addView(folderIcon);
+                } else {
+                    folderIcon.bind(folderInfo);
+                    folderIcon.setOnLongClickListener(mOnIconLongClickListener);
+                }
                 break;
             default:
                 if (mAdapterProvider.isViewSupported(holder.getItemViewType())) {

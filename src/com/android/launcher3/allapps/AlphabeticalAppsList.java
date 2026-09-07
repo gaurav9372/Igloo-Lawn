@@ -347,7 +347,8 @@ public class AlphabeticalAppsList<T extends Context & ActivityContext> implement
                 item.rowIndex = 0;
                 if (BaseAllAppsAdapter.isDividerViewType(item.viewType)
                         || BaseAllAppsAdapter.isPrivateSpaceHeaderView(item.viewType)
-                        || BaseAllAppsAdapter.isPrivateSpaceSysAppsDividerView(item.viewType)) {
+                        || BaseAllAppsAdapter.isPrivateSpaceSysAppsDividerView(item.viewType)
+                        || item.viewType == BaseAllAppsAdapter.VIEW_TYPE_CATEGORY_HEADER) {
                     numAppsInSection = 0;
                 } else if (BaseAllAppsAdapter.isIconViewType(item.viewType)) {
                     if (numAppsInSection % mNumAppsPerRowAllApps == 0) {
