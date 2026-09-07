@@ -168,7 +168,6 @@ class LawnchairBackup(
 
         val contentOptions = listOf(
             INCLUDE_LAYOUT_AND_SETTINGS to R.string.backup_content_layout_and_settings,
-            INCLUDE_WALLPAPER to R.string.backup_content_wallpaper,
             INCLUDE_CATEGORIES to R.string.backup_content_categories,
         )
 

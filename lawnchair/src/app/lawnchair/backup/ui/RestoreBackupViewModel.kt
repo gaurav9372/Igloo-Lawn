@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import app.lawnchair.backup.LawnchairBackup
+import app.lawnchair.util.removeFlag
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -67,7 +68,7 @@ class RestoreBackupViewModel(
             try {
                 val backup = LawnchairBackup(getApplication(), backupUri)
                 backup.readInfoAndPreview()
-                setBackupContents(backup.info.contents)
+                setBackupContents(backup.info.contents.removeFlag(LawnchairBackup.INCLUDE_WALLPAPER))
                 viewModelState.update { it.copy(backup = backup) }
             } catch (t: Throwable) {
                 Log.e("RestoreBackupViewModel", "failed to parse backup", t)

@@ -155,15 +155,6 @@ fun ColumnScope.RestoreBackupOptions(
                 .clip(MaterialTheme.shapes.large),
             darkText = backup.info.previewDarkText,
         ) {
-            val wallpaper = backup.wallpaper
-            if (contents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER) && wallpaper != null) {
-                Image(
-                    bitmap = wallpaper.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillHeight,
-                )
-            }
             val screenshot = backup.screenshot
             if (contents.hasFlag(LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS) && screenshot != null) {
                 Image(
@@ -186,13 +177,6 @@ fun ColumnScope.RestoreBackupOptions(
             mask = LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS,
             label = stringResource(id = R.string.backup_content_layout_and_settings),
             enabled = backupContents.hasFlag(LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS),
-        )
-        FlagSwitchPreference(
-            flags = contents,
-            setFlags = viewModel::setBackupContents,
-            mask = LawnchairBackup.INCLUDE_WALLPAPER,
-            label = stringResource(id = R.string.backup_content_wallpaper),
-            enabled = backupContents.hasFlag(LawnchairBackup.INCLUDE_WALLPAPER),
         )
         FlagSwitchPreference(
             flags = contents,
