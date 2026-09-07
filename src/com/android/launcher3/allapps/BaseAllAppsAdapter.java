@@ -583,16 +583,21 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
                 TextView tvCount = container.findViewById(R.id.category_header_count);
                 android.widget.ImageView ivArrow = container.findViewById(R.id.category_header_arrow);
 
-                boolean isFirstHeader = true;
+                boolean isRecentHeader = java.util.Objects.equals(item.categoryId,
+                        app.lawnchair.allapps.LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID);
+                boolean isFirstCategorySection = true;
                 for (int i = 0; i < position; i++) {
-                    if (mApps.getAdapterItems().get(i).viewType == VIEW_TYPE_CATEGORY_HEADER) {
-                        isFirstHeader = false;
+                    AdapterItem prevItem = mApps.getAdapterItems().get(i);
+                    if (prevItem.viewType == VIEW_TYPE_CATEGORY_HEADER
+                            && !java.util.Objects.equals(prevItem.categoryId,
+                            app.lawnchair.allapps.LawnchairAlphabeticalAppsList.RECENT_CATEGORY_ID)) {
+                        isFirstCategorySection = false;
                         break;
                     }
                 }
 
                 if (vDivider != null) {
-                    if (isFirstHeader) {
+                    if (isRecentHeader || isFirstCategorySection) {
                         vDivider.setVisibility(View.GONE);
                     } else {
                         vDivider.setVisibility(View.VISIBLE);
@@ -611,6 +616,14 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
 
                 if (tvTitle != null) {
                     tvTitle.setText(item.sectionTitle);
+                    View headerLayout = (View) tvTitle.getParent();
+                    if (headerLayout != null) {
+                        int paddingHoriz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
+                        int paddingTop = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, mActivityContext.getResources().getDisplayMetrics());
+                        int paddingBottomDip = isRecentHeader ? 18 : 8;
+                        int paddingBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, paddingBottomDip, mActivityContext.getResources().getDisplayMetrics());
+                        headerLayout.setPadding(paddingHoriz, paddingTop, paddingHoriz, paddingBottom);
+                    }
                 }
                 if (tvCount != null) {
                     if (item.categoryAppCount >= 0) {
