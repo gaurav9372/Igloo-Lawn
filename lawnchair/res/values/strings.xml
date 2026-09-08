@@ -168,7 +168,7 @@
     <string name="advanced">Advanced</string>
     <string name="restart_launcher_description">Reload home screen and clear cached states</string>
     <string name="report_label">Report</string>
-    <string name="report_description">Launcher statistics and metrics for last 7 days</string>
+    <string name="report_description">Launcher statistics and metrics for last 15 days</string>
     <string name="report_select_date">Select Date</string>
 
     <!-- Draggable -->

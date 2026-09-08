@@ -22,6 +22,9 @@ object AppLaunchTracker {
 
     fun recordAppLaunch(context: Context, componentKey: String) {
         if (componentKey.isBlank()) return
+        val comp = ComponentKey.fromString(componentKey)
+        val pkg = comp?.componentName?.packageName ?: ""
+        if (app.lawnchair.report.LawnchairReportRepository.isLauncherPackage(context, pkg)) return
         val appContext = context.applicationContext
         com.android.launcher3.util.Executors.MODEL_EXECUTOR.execute {
             synchronized(this) {
@@ -87,7 +90,13 @@ object AppLaunchTracker {
             val appsStore = launcher.appsView?.appsStore
             if (appsStore != null) {
                 return componentKeys.mapNotNull { keyStr ->
-                    ComponentKey.fromString(keyStr)?.let { appsStore.getApp(it) as? AppInfo }
+                    ComponentKey.fromString(keyStr)?.let { key ->
+                        if (app.lawnchair.report.LawnchairReportRepository.isLauncherPackage(context, key.componentName.packageName)) {
+                            null
+                        } else {
+                            appsStore.getApp(key)
+                        }
+                    }
                 }
             }
         }

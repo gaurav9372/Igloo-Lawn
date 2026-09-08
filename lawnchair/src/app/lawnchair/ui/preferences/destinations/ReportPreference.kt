@@ -197,11 +197,11 @@ fun ReportPreference() {
             }
         }
 
-        // Top 10 Most Clicked Apps Section
-        PreferenceGroup(heading = "Top 10 Most Clicked Apps") {
+        // Top 10 Most Clicked Apps Section (Last 15 Days)
+        PreferenceGroup(heading = "Top 10 Most Clicked Apps (Last 15 Days)") {
             if (report.topClickedApps.isEmpty()) {
                 Text(
-                    text = "No app launches recorded for this date.",
+                    text = "No app launches recorded in the last 15 days.",
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

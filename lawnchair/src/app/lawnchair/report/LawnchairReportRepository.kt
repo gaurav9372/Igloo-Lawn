@@ -102,8 +102,22 @@ object LawnchairReportRepository {
         }
     }
 
+    fun isLauncherPackage(context: Context, packageName: String, appTitle: String = ""): Boolean {
+        if (packageName.isBlank()) return true
+        val targetPkg = packageName.lowercase()
+        val myPkg = context.packageName.lowercase()
+        val buildAppId = try { com.android.launcher3.BuildConfig.APPLICATION_ID.lowercase() } catch (_: Throwable) { "" }
+        if (targetPkg == myPkg || (buildAppId.isNotEmpty() && targetPkg == buildAppId)) return true
+        if (targetPkg == "com.android.launcher3") return true
+        if (targetPkg.contains("lawnchair") || targetPkg.contains("igloo") || targetPkg.contains("lawnshair")) return true
+        if (targetPkg.startsWith("app.lawnchair")) return true
+        val title = appTitle.lowercase()
+        if (title.contains("lawnchair") || title.contains("igloo") || title.contains("lawnshair")) return true
+        return false
+    }
+
     fun onAppClicked(context: Context, appTitle: String, packageName: String) {
-        if (packageName.isBlank()) return
+        if (packageName.isBlank() || isLauncherPackage(context, packageName, appTitle)) return
         val today = getTodayKey()
         val prefs = getPrefs(context)
         val key = "${today}_app_${packageName}"
@@ -121,7 +135,7 @@ object LawnchairReportRepository {
         val displayFormatter = DateTimeFormatter.ofPattern("dd MMM, yyyy", Locale.ENGLISH)
         val shortFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH)
 
-        for (i in 0 until 7) {
+        for (i in 0 until 15) {
             val date = today.minusDays(i.toLong())
             val key = date.toString()
             val label = when (i) {
@@ -132,6 +146,53 @@ object LawnchairReportRepository {
             options.add(DateOption(key = key, label = label, dateStr = date.format(displayFormatter)))
         }
         return options
+    }
+
+    fun getTopClickedApps(context: Context, days: Int = 15): List<AppClickCount> {
+        val prefs = getPrefs(context)
+        val today = LocalDate.now()
+        val allEntries = prefs.all
+
+        // Collect all dateKeys for the last `days`
+        val targetDateKeys = (0 until days).map { today.minusDays(it.toLong()).toString() }.toSet()
+
+        val countsMap = mutableMapOf<String, Int>()
+        val titlesMap = mutableMapOf<String, String>()
+
+        for ((k, v) in allEntries) {
+            if (v !is Int || v <= 0) continue
+            // key format: "${dateKey}_app_${packageName}"
+            val separatorIndex = k.indexOf("_app_")
+            if (separatorIndex == -1) continue
+
+            val dateKey = k.substring(0, separatorIndex)
+            if (dateKey !in targetDateKeys) continue
+
+            val pkg = k.substring(separatorIndex + 5)
+            val titleKey = "${dateKey}_apptitle_$pkg"
+            val title = prefs.getString(titleKey, null) ?: ""
+
+            if (isLauncherPackage(context, pkg, title)) continue
+
+            countsMap[pkg] = (countsMap[pkg] ?: 0) + v
+
+            if (!titlesMap.containsKey(pkg) && title.isNotBlank()) {
+                titlesMap[pkg] = title
+            }
+        }
+
+        val pm = context.packageManager
+        val clickList = countsMap.map { (pkg, count) ->
+            val title = titlesMap[pkg] ?: try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (_: Exception) {
+                pkg
+            }
+            AppClickCount(packageName = pkg, appTitle = title, count = count)
+        }.sortedByDescending { it.count }
+
+        return clickList.take(10)
     }
 
     fun getReportForDate(context: Context, dateKey: String): DayReport {
@@ -161,21 +222,8 @@ object LawnchairReportRepository {
             "N/A"
         }
 
-        // Gather click counts for dateKey
-        val clickList = mutableListOf<AppClickCount>()
-        val prefix = "${dateKey}_app_"
-        val titlePrefix = "${dateKey}_apptitle_"
-
-        val allEntries = prefs.all
-        for ((k, v) in allEntries) {
-            if (k.startsWith(prefix) && !k.startsWith(titlePrefix) && v is Int && v > 0) {
-                val pkg = k.removePrefix(prefix)
-                val title = prefs.getString("${titlePrefix}$pkg", pkg) ?: pkg
-                clickList.add(AppClickCount(packageName = pkg, appTitle = title, count = v))
-            }
-        }
-        clickList.sortByDescending { it.count }
-        val top10 = clickList.take(10)
+        // Top 10 most clicked apps across the last 15 days (excluding launcher app itself)
+        val top10 = getTopClickedApps(context, days = 15)
 
         // Total apps count
         val totalApps = getTotalAppsCount(context)
