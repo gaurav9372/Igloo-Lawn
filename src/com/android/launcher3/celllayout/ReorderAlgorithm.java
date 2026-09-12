@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
-import app.lawnchair.preferences2.PreferenceCacheExtensionsKt;
-
 /**
  * Contains the logic of a reorder.
  *
@@ -134,7 +132,9 @@ public class ReorderAlgorithm {
         Rect occupiedRect = new Rect(cellX, cellY, cellX + spanX, cellY + spanY);
 
         // Lawnchair: Widget overlap
-        if (PreferenceCacheExtensionsKt.firstCached(mCellLayout.pref.getAllowWidgetOverlap(), mCellLayout.pref)) {
+        if (mCellLayout.isWidgetOverlapAllowedForDrag(ignoreView)
+                && cellX + spanX <= mCellLayout.getCountX()
+                && cellY + spanY <= mCellLayout.getCountY()) {
             solution.intersectingViews = new ArrayList<>(intersectingViews);
             return true;
         }

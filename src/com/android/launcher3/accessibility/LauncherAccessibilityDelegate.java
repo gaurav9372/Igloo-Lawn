@@ -260,8 +260,8 @@ public class LauncherAccessibilityDelegate extends BaseAccessibilityDelegate<Lau
             layout = (CellLayout) host.getParent().getParent();
         }
         if ((providerInfo.resizeMode & AppWidgetProviderInfo.RESIZE_HORIZONTAL) != 0) {
-            if (layout.isRegionVacant(info.cellX + info.spanX, info.cellY, 1, info.spanY) ||
-                    layout.isRegionVacant(info.cellX - 1, info.cellY, 1, info.spanY)) {
+            if (layout.isRegionVacantForWidget(info.cellX + info.spanX, info.cellY, 1, info.spanY) ||
+                    layout.isRegionVacantForWidget(info.cellX - 1, info.cellY, 1, info.spanY)) {
                 actions.add(new OptionItem(mContext,
                         R.string.action_increase_width,
                         R.drawable.ic_widget_width_increase,
@@ -279,8 +279,8 @@ public class LauncherAccessibilityDelegate extends BaseAccessibilityDelegate<Lau
         }
 
         if ((providerInfo.resizeMode & AppWidgetProviderInfo.RESIZE_VERTICAL) != 0) {
-            if (layout.isRegionVacant(info.cellX, info.cellY + info.spanY, info.spanX, 1) ||
-                    layout.isRegionVacant(info.cellX, info.cellY - 1, info.spanX, 1)) {
+            if (layout.isRegionVacantForWidget(info.cellX, info.cellY + info.spanY, info.spanX, 1) ||
+                    layout.isRegionVacantForWidget(info.cellX, info.cellY - 1, info.spanX, 1)) {
                 actions.add(new OptionItem(mContext,
                         R.string.action_increase_height,
                         R.drawable.ic_widget_height_increase,
@@ -306,8 +306,8 @@ public class LauncherAccessibilityDelegate extends BaseAccessibilityDelegate<Lau
 
         if (action == R.string.action_increase_width) {
             if (((host.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL)
-                    && layout.isRegionVacant(info.cellX - 1, info.cellY, 1, info.spanY))
-                    || !layout.isRegionVacant(info.cellX + info.spanX, info.cellY, 1, info.spanY)) {
+                    && layout.isRegionVacantForWidget(info.cellX - 1, info.cellY, 1, info.spanY))
+                    || !layout.isRegionVacantForWidget(info.cellX + info.spanX, info.cellY, 1, info.spanY)) {
                 lp.setCellX(lp.getCellX() - 1);
                 info.cellX --;
             }
@@ -317,7 +317,7 @@ public class LauncherAccessibilityDelegate extends BaseAccessibilityDelegate<Lau
             lp.cellHSpan --;
             info.spanX --;
         } else if (action == R.string.action_increase_height) {
-            if (!layout.isRegionVacant(info.cellX, info.cellY + info.spanY, info.spanX, 1)) {
+            if (!layout.isRegionVacantForWidget(info.cellX, info.cellY + info.spanY, info.spanX, 1)) {
                 lp.setCellY(lp.getCellY() - 1);
                 info.cellY --;
             }

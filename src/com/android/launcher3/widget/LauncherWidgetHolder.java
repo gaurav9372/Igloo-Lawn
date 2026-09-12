@@ -256,27 +256,7 @@ public class LauncherWidgetHolder {
      * @param requestCode The request code
      */
     public void startConfigActivity(@NonNull BaseActivity activity, int widgetId, int requestCode) {
-        startConfigActivity(activity, widgetId, requestCode, 0);
-    }
-
-    /**
-     * Starts the configuration activity for the widget with retry counter
-     * 
-     * @param activity    The activity in which to start the configuration page
-     * @param widgetId    The ID of the widget
-     * @param requestCode The request code
-     * @param retryCount  The number of retries attempted
-     */
-    private void startConfigActivity(@NonNull BaseActivity activity, int widgetId,
-            int requestCode, int retryCount) {
         if (!WIDGETS_ENABLED) {
-            sendActionCancelled(activity, requestCode);
-            return;
-        }
-
-        // Prevent infinite loops by limiting retries
-        if (retryCount >= 3) {
-            Log.e(this.getClass().getName(), "Too many retries for widget configuration, cancelling");
             sendActionCancelled(activity, requestCode);
             return;
         }
@@ -289,24 +269,9 @@ public class LauncherWidgetHolder {
             Toast.makeText(activity, R.string.activity_not_found, Toast.LENGTH_SHORT).show();
             sendActionCancelled(activity, requestCode);
         } catch (IllegalArgumentException e) {
-            // Widget ID became invalid, possibly due to two-step configuration some cases
-            Log.e(this.getClass().getName(), "Widget ID became invalid during configuration (retry " + retryCount + ")", e);
-            handleInvalidWidgetId(activity, widgetId, requestCode, retryCount + 1);
-        }
-    }
-
-    private void handleInvalidWidgetId(BaseActivity activity, int widgetId, int requestCode) {
-        handleInvalidWidgetId(activity, widgetId, requestCode, 0);
-    }
-
-    private void handleInvalidWidgetId(BaseActivity activity, int widgetId, int requestCode, int retryCount) {
-        // Remove the invalid widget
-        deleteAppWidgetId(widgetId);
-
-        int newWidgetId = allocateAppWidgetId();
-        if (newWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-            startConfigActivity(activity, newWidgetId, requestCode, retryCount);
-        } else {
+            // The original ID still belongs to the pending request or an existing workspace
+            // widget. Replacing it here would leave that request pointing at a deleted ID.
+            Log.e(TAG, "Widget ID became invalid during configuration", e);
             sendActionCancelled(activity, requestCode);
         }
     }

@@ -93,7 +93,10 @@ class SmartspaceWidgetReader(context: Context) :
     ): List<SmartspaceTarget> {
         val weather = parseWeatherData(weatherIcon, temperature) ?: dummyTarget
         val card = if (cardIcon != null && title != null && subtitle != null) {
-            val pendingIntent = (title.parent.parent.parent as? View)?.pendingIntent
+            val pendingIntent = generateSequence(title as View) { it.parent as? View }
+                .take(4)
+                .mapNotNull { it.pendingIntent }
+                .firstOrNull()
             val ttl = title.text.toString() + if (subtitle2 != null) subtitle.text.toString() else ""
             val sub = subtitle2 ?: subtitle
             SmartspaceTarget(
@@ -172,7 +175,9 @@ class SmartspaceWidgetReader(context: Context) :
         fun parseWeatherData(weatherIcon: Bitmap?, temperature: String?, intent: PendingIntent? = null): WeatherData? {
             return if (weatherIcon != null && temperature != null) {
                 try {
-                    val value = temperature.substring(0, temperature.indexOfFirst { (it < '0' || it > '9') && it != '-' }).toInt()
+                    val numberEnd = temperature.indexOfFirst { (it < '0' || it > '9') && it != '-' }
+                        .takeIf { it >= 0 } ?: temperature.length
+                    val value = temperature.substring(0, numberEnd).toInt()
                     WeatherData(
                         weatherIcon,
                         Temperature(

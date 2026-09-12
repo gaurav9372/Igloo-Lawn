@@ -844,18 +844,21 @@ public class CellLayout extends ViewGroup {
 
     @Override
     public void removeViews(int start, int count) {
-        for (int i = start; i < start + count; i++) {
-            markCellsAsUnoccupiedForView(mShortcutsAndWidgets.getChildAt(i));
-        }
         mShortcutsAndWidgets.removeViews(start, count);
+        rebuildOccupiedCells();
     }
 
     @Override
     public void removeViewsInLayout(int start, int count) {
-        for (int i = start; i < start + count; i++) {
-            markCellsAsUnoccupiedForView(mShortcutsAndWidgets.getChildAt(i));
-        }
         mShortcutsAndWidgets.removeViewsInLayout(start, count);
+        rebuildOccupiedCells();
+    }
+
+    private void rebuildOccupiedCells() {
+        mOccupied.clear();
+        for (int i = 0; i < mShortcutsAndWidgets.getChildCount(); i++) {
+            markCellsAsOccupiedForView(mShortcutsAndWidgets.getChildAt(i));
+        }
     }
 
     /**
@@ -1880,12 +1883,25 @@ public class CellLayout extends ViewGroup {
                 && view.getTag() instanceof LauncherAppWidgetInfo info) {
             CellPos pos = mActivity.getCellPosMapper().mapModelToPresenter(info);
             mOccupied.markCells(pos.cellX, pos.cellY, info.spanX, info.spanY, false);
+            restoreOccupiedCellsForOtherViews(view);
             return;
         }
         if (view == null || view.getParent() != mShortcutsAndWidgets) return;
         CellLayoutLayoutParams
                 lp = (CellLayoutLayoutParams) view.getLayoutParams();
         mOccupied.markCells(lp.getCellX(), lp.getCellY(), lp.cellHSpan, lp.cellVSpan, false);
+        restoreOccupiedCellsForOtherViews(view);
+    }
+
+    private void restoreOccupiedCellsForOtherViews(View excludedView) {
+        // The occupancy grid is boolean, so clearing one overlapping item also clears the cells
+        // occupied by any items beneath it.
+        for (int i = 0; i < mShortcutsAndWidgets.getChildCount(); i++) {
+            View child = mShortcutsAndWidgets.getChildAt(i);
+            if (child != excludedView) {
+                markCellsAsOccupiedForView(child);
+            }
+        }
     }
 
     public int getDesiredWidth() {
@@ -1927,7 +1943,7 @@ public class CellLayout extends ViewGroup {
 
     public boolean isOccupied(int x, int y) {
         if (x >= 0 && x < mCountX && y >= 0 && y < mCountY) {
-            return mOccupied.cells[x][y] && !PreferenceCacheExtensionsKt.firstCached(pref.getAllowWidgetOverlap());
+            return mOccupied.cells[x][y];
         }
         if (BuildConfigs.IS_STUDIO_BUILD) {
             throw new RuntimeException("Position exceeds the bound of this CellLayout");
@@ -2010,7 +2026,40 @@ public class CellLayout extends ViewGroup {
     }
 
     public boolean isRegionVacant(int x, int y, int spanX, int spanY) {
-        return mOccupied.isRegionVacant(x, y, spanX, spanY) || PreferenceCacheExtensionsKt.firstCached(pref.getAllowWidgetOverlap());
+        return mOccupied.isRegionVacant(x, y, spanX, spanY);
+    }
+
+    public boolean isRegionVacantForWidget(int x, int y, int spanX, int spanY) {
+        return x >= 0 && y >= 0 && spanX > 0 && spanY > 0
+                && x + spanX <= mCountX && y + spanY <= mCountY
+                && (isRegionVacant(x, y, spanX, spanY)
+                || PreferenceCacheExtensionsKt.firstCached(pref.getAllowWidgetOverlap()));
+    }
+
+    public boolean isRegionVacantForDrop(int x, int y, int spanX, int spanY, ItemInfo item) {
+        if (item.itemType == Favorites.ITEM_TYPE_APPWIDGET
+                || item.itemType == Favorites.ITEM_TYPE_CUSTOM_APPWIDGET) {
+            return isRegionVacantForWidget(x, y, spanX, spanY);
+        }
+        return isRegionVacant(x, y, spanX, spanY);
+    }
+
+    public boolean isWidgetOverlapAllowedForDrag(View dragView) {
+        if (!PreferenceCacheExtensionsKt.firstCached(pref.getAllowWidgetOverlap())) {
+            return false;
+        }
+        if (dragView instanceof LauncherAppWidgetHostView) {
+            return true;
+        }
+        if (mActivity instanceof Launcher launcher && launcher.getDragController() != null) {
+            DropTarget.DragObject dragObject = launcher.getDragController().mDragObject;
+            if (dragObject != null && dragObject.dragInfo != null) {
+                int itemType = dragObject.dragInfo.itemType;
+                return itemType == Favorites.ITEM_TYPE_APPWIDGET
+                        || itemType == Favorites.ITEM_TYPE_CUSTOM_APPWIDGET;
+            }
+        }
+        return false;
     }
 
     public void setSpaceBetweenCellLayoutsPx(@Px int spaceBetweenCellLayoutsPx) {

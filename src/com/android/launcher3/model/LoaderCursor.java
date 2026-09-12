@@ -667,8 +667,56 @@ public class LoaderCursor extends CursorWrapper {
                     + " into cell (" + containerIndex + "-" + item.screenId + ":"
                     + item.cellX + "," + item.cellX + "," + item.spanX + "," + item.spanY
                     + ") already occupied");
-            return PreferenceCacheExtensionsKt.firstCached(preferenceManager2.getAllowWidgetOverlap());
+            boolean isWidget = item.itemType == Favorites.ITEM_TYPE_APPWIDGET
+                    || item.itemType == Favorites.ITEM_TYPE_CUSTOM_APPWIDGET;
+            if (isWidget && PreferenceCacheExtensionsKt.firstCached(
+                    preferenceManager2.getAllowWidgetOverlap())) {
+                occupancy.markCells(item, true);
+                return true;
+            }
+
+            // Previously overlapping items must survive turning the preference off. Move them
+            // to a free cell (or a new page) and persist that position before binding views.
+            int[] vacantCell = new int[2];
+            GridOccupancy targetOccupancy = occupancy;
+            if (!findVacantWorkspaceCell(targetOccupancy, vacantCell, item.spanX,
+                    item.spanY, countX, countY)) {
+                item.screenId = mModel.getModelDbController().getNewScreenId();
+                while (mOccupied.containsKey(item.screenId)) {
+                    item.screenId++;
+                }
+                targetOccupancy = new GridOccupancy(countX + 1, countY + 1);
+                mOccupied.put(item.screenId, targetOccupancy);
+                if (!findVacantWorkspaceCell(targetOccupancy, vacantCell, item.spanX,
+                        item.spanY, countX, countY)) {
+                    return false;
+                }
+            }
+            item.cellX = vacantCell[0];
+            item.cellY = vacantCell[1];
+            targetOccupancy.markCells(item, true);
+            ContentValues values = new ContentValues();
+            values.put(Favorites.SCREEN, item.screenId);
+            values.put(Favorites.CELLX, item.cellX);
+            values.put(Favorites.CELLY, item.cellY);
+            mModel.getModelDbController().update(values, Favorites._ID + " = ?",
+                    new String[]{Integer.toString(item.id)});
+            return true;
         }
+    }
+
+    private static boolean findVacantWorkspaceCell(GridOccupancy occupancy, int[] cell,
+            int spanX, int spanY, int countX, int countY) {
+        for (int y = 0; y + spanY <= countY; y++) {
+            for (int x = 0; x + spanX <= countX; x++) {
+                if (occupancy.isRegionVacant(x, y, spanX, spanY)) {
+                    cell[0] = x;
+                    cell[1] = y;
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @AssistedFactory

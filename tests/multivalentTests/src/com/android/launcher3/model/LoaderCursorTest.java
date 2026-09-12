@@ -212,29 +212,49 @@ public class LoaderCursorTest {
     }
 
     @Test
-    public void checkItemPlacement_overlappingItems() {
+    public void checkItemPlacement_relocatesOverlappingItems() {
         mIDP.numRows = 4;
         mIDP.numColumns = 4;
         mIDP.numDatabaseHotseatIcons = 3;
 
-        // Overlapping mItems are not placed
+        // Colliding items remain on the workspace and move to vacant cells.
         assertTrue(mLoaderCursor.checkItemPlacement(
                 newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 1)));
-        assertFalse(mLoaderCursor.checkItemPlacement(
-                newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 1)));
+        ItemInfo relocated = newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 1);
+        assertTrue(mLoaderCursor.checkItemPlacement(relocated));
+        assertEquals(1, relocated.cellX);
+        assertEquals(0, relocated.cellY);
 
         assertTrue(mLoaderCursor.checkItemPlacement(
                 newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 2)));
-        assertFalse(mLoaderCursor.checkItemPlacement(
-                newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 2)));
+        relocated = newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 2);
+        assertTrue(mLoaderCursor.checkItemPlacement(relocated));
+        assertEquals(1, relocated.cellX);
+        assertEquals(0, relocated.cellY);
 
         assertTrue(mLoaderCursor.checkItemPlacement(
                 newItemInfo(1, 1, 1, 1, CONTAINER_DESKTOP, 1)));
         assertTrue(mLoaderCursor.checkItemPlacement(
                 newItemInfo(2, 2, 2, 2, CONTAINER_DESKTOP, 1)));
 
-        assertFalse(mLoaderCursor.checkItemPlacement(
-                newItemInfo(3, 2, 1, 2, CONTAINER_DESKTOP, 1)));
+        relocated = newItemInfo(3, 2, 1, 2, CONTAINER_DESKTOP, 1);
+        assertTrue(mLoaderCursor.checkItemPlacement(relocated));
+        assertEquals(2, relocated.cellX);
+        assertEquals(0, relocated.cellY);
+    }
+
+    @Test
+    public void checkItemPlacement_createsScreenWhenNoVacantCellRemains() {
+        mIDP.numRows = 2;
+        mIDP.numColumns = 2;
+
+        assertTrue(mLoaderCursor.checkItemPlacement(
+                newItemInfo(0, 0, 2, 2, CONTAINER_DESKTOP, 1)));
+        ItemInfo relocated = newItemInfo(0, 0, 1, 1, CONTAINER_DESKTOP, 1);
+        assertTrue(mLoaderCursor.checkItemPlacement(relocated));
+        assertTrue(relocated.screenId > 1);
+        assertEquals(0, relocated.cellX);
+        assertEquals(0, relocated.cellY);
     }
 
     @Test

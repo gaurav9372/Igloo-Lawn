@@ -2325,7 +2325,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 // workspace. So instead we move the icon back safely to its original position.
                 boolean returnToOriginalCellToPreventShuffling = !isFinishedSwitchingState()
                         && !droppedOnOriginalCellDuringTransition && !dropTargetLayout
-                        .isRegionVacant(mTargetCell[0], mTargetCell[1], spanX, spanY);
+                        .isRegionVacantForDrop(mTargetCell[0], mTargetCell[1], spanX, spanY, item);
                 int[] resultSpan = new int[2];
                 if (returnToOriginalCellToPreventShuffling) {
                     mTargetCell[0] = mTargetCell[1] = -1;

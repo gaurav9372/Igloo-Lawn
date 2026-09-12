@@ -18,6 +18,7 @@ import com.android.launcher3.util.SafeCloseable
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,11 +44,13 @@ class HeadlessWidgetsManager @Inject constructor(
     }
 
     fun getWidget(info: AppWidgetProviderInfo, prefKey: String): Widget {
-        val widget = widgetsMap.getOrPut(prefKey) { Widget(info, prefKey) }
-        check(info.provider == widget.info.provider) {
-            "widget $prefKey was created with a different provider"
+        val existing = widgetsMap[prefKey]
+        if (existing != null && existing.info.provider == info.provider &&
+            existing.info.profile == info.profile
+        ) {
+            return existing
         }
-        return widget
+        return Widget(info, prefKey).also { widgetsMap[prefKey] = it }
     }
 
     fun subscribeUpdates(info: AppWidgetProviderInfo, prefKey: String): Flow<AppWidgetHostView> {
@@ -59,7 +62,9 @@ class HeadlessWidgetsManager @Inject constructor(
     }
 
     override fun close() {
-        TODO("Not yet implemented")
+        scope.cancel()
+        host.stopListening()
+        widgetsMap.clear()
     }
 
     private class HeadlessAppWidgetHost(context: Context) : AppWidgetHost(context, 1028) {
@@ -89,7 +94,9 @@ class HeadlessWidgetsManager @Inject constructor(
 
         private var widgetId = prefs.getInt(prefKey, -1)
         val isBound: Boolean
-            get() = widgetManager.getAppWidgetInfo(widgetId)?.provider == info.provider
+            get() = widgetManager.getAppWidgetInfo(widgetId)?.let {
+                it.provider == info.provider && it.profile == info.profile
+            } == true
         val updates = callbackFlow {
             val view = host.createView(context, widgetId, info) as HeadlessAppWidgetHostView
             trySend(view)

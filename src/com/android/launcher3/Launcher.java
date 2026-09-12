@@ -289,6 +289,8 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import app.lawnchair.LawnchairApp;
+import app.lawnchair.preferences2.PreferenceCacheExtensionsKt;
+import app.lawnchair.preferences2.PreferenceManager2;
 
 /**
  * Default launcher application.
@@ -847,7 +849,8 @@ public class Launcher extends StatefulActivity<LauncherState>
         if (requestCode == REQUEST_BIND_APPWIDGET) {
             // This is called only if the user did not previously have permissions to bind widgets
             final int appWidgetId = data != null ?
-                    data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) : -1;
+                    data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingAddWidgetId)
+                    : pendingAddWidgetId;
             if (resultCode == RESULT_CANCELED) {
                 completeTwoStageWidgetDrop(RESULT_CANCELED, appWidgetId, requestArgs);
                 mWorkspace.removeExtraEmptyScreenDelayed(
@@ -990,7 +993,13 @@ public class Launcher extends StatefulActivity<LauncherState>
                 }
             };
         } else if (resultCode == RESULT_CANCELED) {
-            mAppWidgetHolder.deleteAppWidgetId(appWidgetId);
+            LauncherAppWidgetHostView pendingView = mWorkspace.getWidgetForAppWidgetId(appWidgetId);
+            if (pendingView != null && pendingView.getTag() instanceof LauncherAppWidgetInfo info) {
+                removeItem(pendingView, info, true,
+                        "widget configuration cancelled");
+            } else if (appWidgetId > 0) {
+                mAppWidgetHolder.deleteAppWidgetId(appWidgetId);
+            }
             animationType = Workspace.CANCEL_TWO_STAGE_WIDGET_DROP_ANIMATION;
         }
         if (mDragLayer.getAnimatedView() != null) {
@@ -2227,7 +2236,11 @@ public class Launcher extends StatefulActivity<LauncherState>
             CellPos presenterPos = getCellPosMapper().mapModelToPresenter(item);
             if (item.container == CONTAINER_DESKTOP) {
                 CellLayout cl = mWorkspace.getScreenWithId(presenterPos.screenId);
-                if (cl != null && cl.isOccupied(presenterPos.cellX, presenterPos.cellY)) {
+                boolean allowOverlappingWidget = item instanceof LauncherAppWidgetInfo
+                        && PreferenceCacheExtensionsKt.firstCached(
+                        PreferenceManager2.getInstance(this).getAllowWidgetOverlap());
+                if (cl != null && cl.isOccupied(presenterPos.cellX, presenterPos.cellY)
+                        && !allowOverlappingWidget) {
                     View occupiedView = cl.getChildAt(presenterPos.cellX, presenterPos.cellY);
                     Object tag = occupiedView == null ? null : occupiedView.getTag();
                     String desc = "Collision while binding workspace item: " + item
