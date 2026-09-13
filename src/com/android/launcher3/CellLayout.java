@@ -1181,6 +1181,11 @@ public class CellLayout extends ViewGroup {
 
     void visualizeDropLocation(int cellX, int cellY, int spanX, int spanY,
                                DropTarget.DragObject dragObject) {
+        if (cellX < 0 || cellY < 0 || spanX <= 0 || spanY <= 0
+                || cellX + spanX > mCountX || cellY + spanY > mCountY) {
+            clearDragOutlines();
+            return;
+        }
         if (mDragCell[0] != cellX || mDragCell[1] != cellY || mDragCellSpan[0] != spanX
                 || mDragCellSpan[1] != spanY) {
             determineIfDragHapticsPlay();
@@ -1240,9 +1245,11 @@ public class CellLayout extends ViewGroup {
     }
 
     public void clearDragOutlines() {
-        final int oldIndex = mDragOutlineCurrent;
-        mDragOutlineAnims[oldIndex].animateOut();
+        for (InterruptibleInOutAnimator anim : mDragOutlineAnims) {
+            anim.animateOut();
+        }
         mDragCell[0] = mDragCell[1] = -1;
+        mDragCellSpan[0] = mDragCellSpan[1] = -1;
     }
 
     /**
@@ -1790,6 +1797,11 @@ public class CellLayout extends ViewGroup {
     void onDragEnter() {
         mDragging = true;
         mPreviousSolution = null;
+        int gridColor = ColorTokens.WorkspaceAccentColor.resolveColor(getContext());
+        if (mGridColor != gridColor) {
+            mGridColor = gridColor;
+            invalidate();
+        }
     }
 
     /**

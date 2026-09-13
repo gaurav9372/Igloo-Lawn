@@ -574,6 +574,10 @@ public abstract class DragController<T extends ActivityContext>
 
             final View dropTargetAsView = dropTarget.getDropView();
             dispatchDropComplete(dropTargetAsView, accepted);
+        } else {
+            // A live widget is detached from its workspace parent while dragging. Even when the
+            // finger ends outside every target, its source must restore that view.
+            dispatchDropComplete(null, false);
         }
     }
 

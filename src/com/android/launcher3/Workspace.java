@@ -2448,6 +2448,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     }
                     mLauncher.getDropTargetBar().onDragEnd();
                     parent.onDropChild(cell);
+                    cell.setVisibility(VISIBLE);
+                    setCurrentDropLayout(null);
+                    setCurrentDragOverlappingLayout(null);
                     return;
                 }
                 final ItemInfo info = (ItemInfo) cell.getTag();
@@ -2569,6 +2572,10 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             enforceDragParity("onDragExit", -1, 0);
         }
 
+        if (d.dragComplete) {
+            mDragViewVisualCenter = d.getVisualCenter(mDragViewVisualCenter);
+            setDropLayoutForDragObject(d, mDragViewVisualCenter[0], mDragViewVisualCenter[1]);
+        }
         if (mDragTargetLayout != null) {
             mDropToLayout = mDragTargetLayout;
         }
@@ -2718,7 +2725,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
 
     public void onDragOver(DragObject d) {
         // Skip drag over events while we are dragging over side pages
-        if (!transitionStateShouldAllowDrop()) return;
+        if (d.dragSource != this && !transitionStateShouldAllowDrop()) return;
 
         ItemInfo item = d.dragInfo;
         if (item == null) {
@@ -2759,7 +2766,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             int reorderX = mTargetCell[0];
             int reorderY = mTargetCell[1];
 
-            setCurrentDropOverCell(mTargetCell[0], mTargetCell[1]);
+            boolean targetCellChanged = mDragOverX != reorderX || mDragOverY != reorderY;
+            int previousDragMode = mDragMode;
+            setCurrentDropOverCell(reorderX, reorderY);
 
             float targetCellDistance = mDragTargetLayout.getDistanceFromWorkspaceCellVisualCenter(
                     mDragViewVisualCenter[0], mDragViewVisualCenter[1], mTargetCell);
@@ -2769,9 +2778,14 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             boolean nearestDropOccupied = mDragTargetLayout.isNearestDropLocationOccupied((int)
                             mDragViewVisualCenter[0], (int) mDragViewVisualCenter[1], item.spanX,
                     item.spanY, child, mTargetCell);
+            if (nearestDropOccupied && mDragTargetLayout.isWidgetOverlapAllowedForDrag(child)
+                    && mDragTargetLayout.isRegionVacantForWidget(mTargetCell[0], mTargetCell[1],
+                    item.spanX, item.spanY)) {
+                nearestDropOccupied = false;
+            }
 
             manageReorderOnDragOver(d, targetCellDistance, nearestDropOccupied, minSpanX, minSpanY,
-                    reorderX, reorderY);
+                    reorderX, reorderY, targetCellChanged || previousDragMode != mDragMode);
 
             if (mDragMode == DRAG_MODE_CREATE_FOLDER || mDragMode == DRAG_MODE_ADD_TO_FOLDER ||
                     !nearestDropOccupied) {
@@ -2783,11 +2797,13 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     protected void manageReorderOnDragOver(DragObject d, float targetCellDistance,
-            boolean nearestDropOccupied, int minSpanX, int minSpanY, int reorderX, int reorderY) {
+            boolean nearestDropOccupied, int minSpanX, int minSpanY, int reorderX, int reorderY,
+            boolean previewNeedsUpdate) {
 
         ItemInfo item = d.dragInfo;
         final View child = (mDragInfo == null) ? null : mDragInfo.cell;
         if (!nearestDropOccupied) {
+            cleanupReorder(true);
             int[] span = new int[2];
             mDragTargetLayout.performReorder((int) mDragViewVisualCenter[0],
                     (int) mDragViewVisualCenter[1], minSpanX, minSpanY, item.spanX, item.spanY,
@@ -2797,22 +2813,34 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
             nearestDropOccupied = mDragTargetLayout.isNearestDropLocationOccupied((int)
                             mDragViewVisualCenter[0], (int) mDragViewVisualCenter[1], item.spanX,
                     item.spanY, child, mTargetCell);
-        } else if ((mDragMode == DRAG_MODE_NONE || mDragMode == DRAG_MODE_REORDER)
-                && (mLastReorderX != reorderX || mLastReorderY != reorderY)
-                && targetCellDistance < mDragTargetLayout.getReorderRadius(mTargetCell, item.spanX,
-                item.spanY)) {
-            mReorderAlarm.cancelAlarm();
-            mLastReorderX = reorderX;
-            mLastReorderY = reorderY;
-            mDragTargetLayout.performReorder((int) mDragViewVisualCenter[0],
-                    (int) mDragViewVisualCenter[1], minSpanX, minSpanY, item.spanX, item.spanY,
-                    child, mTargetCell, new int[2], CellLayout.MODE_SHOW_REORDER_HINT);
-            // Otherwise, if we aren't adding to or creating a folder and there's no pending
-            // reorder, then we schedule a reorder
-            ReorderAlarmListener listener = new ReorderAlarmListener(mDragViewVisualCenter,
-                    minSpanX, minSpanY, item.spanX, item.spanY, d, child);
-            mReorderAlarm.setOnAlarmListener(listener);
-            mReorderAlarm.setAlarm(REORDER_TIMEOUT);
+        } else if (mDragMode == DRAG_MODE_NONE || mDragMode == DRAG_MODE_REORDER) {
+            boolean inReorderRadius = targetCellDistance < mDragTargetLayout.getReorderRadius(
+                    mTargetCell, item.spanX, item.spanY);
+            boolean scheduleReorder = mDragMode == DRAG_MODE_NONE && inReorderRadius
+                    && (mLastReorderX != reorderX || mLastReorderY != reorderY);
+
+            if (previewNeedsUpdate || scheduleReorder) {
+                int[] span = new int[2];
+                mDragTargetLayout.performReorder((int) mDragViewVisualCenter[0],
+                        (int) mDragViewVisualCenter[1], minSpanX, minSpanY, item.spanX,
+                        item.spanY, child, mTargetCell, span, CellLayout.MODE_SHOW_REORDER_HINT);
+                mDragTargetLayout.visualizeDropLocation(mTargetCell[0], mTargetCell[1], span[0],
+                        span[1], d);
+            }
+
+            if (!inReorderRadius) {
+                cleanupReorder(true);
+            } else if (scheduleReorder) {
+                mReorderAlarm.cancelAlarm();
+                mLastReorderX = reorderX;
+                mLastReorderY = reorderY;
+                mReorderAlarm.setOnAlarmListener(new ReorderAlarmListener(mDragTargetLayout,
+                        reorderX, reorderY, minSpanX, minSpanY, item.spanX, item.spanY,
+                        d, child));
+                mReorderAlarm.setAlarm(REORDER_TIMEOUT);
+            }
+        } else {
+            cleanupReorder(true);
         }
     }
 
@@ -2886,10 +2914,6 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     private CellLayout checkDragObjectIsOverNeighbourPages(DragObject d, float centerX) {
-        if (isPageInTransition()) {
-            return null;
-        }
-
         // Check the workspace pages whether the object is over any of them
 
         // Note, centerX represents the center of the object that is being dragged, visually.
@@ -3007,14 +3031,18 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     }
 
     class ReorderAlarmListener implements OnAlarmListener {
-        final float[] dragViewCenter;
+        final CellLayout layout;
+        final int hoverCellX, hoverCellY;
         final int minSpanX, minSpanY, spanX, spanY;
         final DragObject dragObject;
         final View child;
 
-        public ReorderAlarmListener(float[] dragViewCenter, int minSpanX, int minSpanY, int spanX,
-                                    int spanY, DragObject dragObject, View child) {
-            this.dragViewCenter = dragViewCenter;
+        public ReorderAlarmListener(CellLayout layout, int hoverCellX, int hoverCellY,
+                                    int minSpanX, int minSpanY, int spanX, int spanY,
+                                    DragObject dragObject, View child) {
+            this.layout = layout;
+            this.hoverCellX = hoverCellX;
+            this.hoverCellY = hoverCellY;
             this.minSpanX = minSpanX;
             this.minSpanY = minSpanY;
             this.spanX = spanX;
@@ -3024,22 +3052,35 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
 
         public void onAlarm(Alarm alarm) {
+            if (mDragTargetLayout != layout || mDragOverX != hoverCellX
+                    || mDragOverY != hoverCellY || !mDragController.isDragging()
+                    || mDragMode != DRAG_MODE_NONE) {
+                return;
+            }
+            int[] currentHoverCell = findNearestArea((int) mDragViewVisualCenter[0],
+                    (int) mDragViewVisualCenter[1], spanX, spanY, layout, new int[2]);
+            if (currentHoverCell[0] != hoverCellX || currentHoverCell[1] != hoverCellY
+                    || layout.getDistanceFromWorkspaceCellVisualCenter(
+                    mDragViewVisualCenter[0], mDragViewVisualCenter[1], currentHoverCell)
+                    >= layout.getReorderRadius(currentHoverCell, spanX, spanY)) {
+                return;
+            }
             int[] resultSpan = new int[2];
             mTargetCell = findNearestArea((int) mDragViewVisualCenter[0],
-                    (int) mDragViewVisualCenter[1], minSpanX, minSpanY, mDragTargetLayout,
+                    (int) mDragViewVisualCenter[1], minSpanX, minSpanY, layout,
                     mTargetCell);
 
-            mTargetCell = mDragTargetLayout.performReorder((int) mDragViewVisualCenter[0],
+            mTargetCell = layout.performReorder((int) mDragViewVisualCenter[0],
                     (int) mDragViewVisualCenter[1], minSpanX, minSpanY, spanX, spanY,
                     child, mTargetCell, resultSpan, CellLayout.MODE_DRAG_OVER);
 
             if (mTargetCell[0] < 0 || mTargetCell[1] < 0) {
-                mDragTargetLayout.revertTempState();
+                layout.revertTempState();
             } else {
                 setDragMode(DRAG_MODE_REORDER);
             }
 
-            mDragTargetLayout.visualizeDropLocation(mTargetCell[0], mTargetCell[1],
+            layout.visualizeDropLocation(mTargetCell[0], mTargetCell[1],
                     resultSpan[0], resultSpan[1], dragObject);
         }
     }
@@ -3658,6 +3699,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 throw new RuntimeException("Invalid state: cellLayout == null in "
                         + "Workspace#onDropCompleted. Please file a bug. ");
             }
+            mDragInfo.cell.setVisibility(VISIBLE);
         }
         View cell = getViewByItemId(d.originalDragInfo.id);
         if (d.cancelled && cell != null) {
