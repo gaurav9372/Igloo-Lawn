@@ -167,6 +167,8 @@ class WorkspaceItemProcessor(
             return
         }
         val appInfoWrapper = ApplicationInfoWrapper(context, targetPkg, c.user)
+        val isDeepSleeping = pmHelper.isDeepSleepingOrDisabled(targetPkg, c.user)
+        val isInstalled = isDeepSleeping || appInfoWrapper.isInstalled() || pmHelper.isAppInstalled(targetPkg, c.user)
         var validTarget = launcherApps.isPackageEnabled(targetPkg, c.user)
 
         // If it's a deep shortcut, we'll use pinned shortcuts to restore it
@@ -195,13 +197,15 @@ class WorkspaceItemProcessor(
                 if (intent != null) {
                     c.restoreFlag = 0
                     c.updater().put(Favorites.INTENT, intent.toUri(0)).commit()
-                } else {
+                } else if (!isInstalled) {
                     c.markDeleted(
                         "No Activities found for id=${c.id}, targetPkg=$targetPkg, component=$cn." +
                             " Unable to create launch Intent.",
                         RestoreError.APP_NO_LAUNCH_INTENT,
                     )
                     return
+                } else {
+                    c.markRestored()
                 }
             }
         }
@@ -270,6 +274,16 @@ class WorkspaceItemProcessor(
                         // Add the icon on the workspace anyway.
                         allowMissingTarget = true
                     }
+                    isInstalled -> {
+                        // Package is installed on device but currently disabled or deep sleeping.
+                        // Keep it on workspace and mark it with the appropriate disabled flag.
+                        if (isDeepSleeping) {
+                            disabledState = disabledState or ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP
+                        } else {
+                            disabledState = disabledState or ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER
+                        }
+                        allowMissingTarget = true
+                    }
                     else -> {
                         // Do not wait for external media load anymore.
                         c.markDeleted(
@@ -288,7 +302,7 @@ class WorkspaceItemProcessor(
             )
             validTarget = false
         }
-        if (validTarget && !isPreArchivedShortcut) {
+        if ((validTarget || isInstalled) && !isPreArchivedShortcut) {
             FileLog.d(
                 TAG,
                 "valid target true, marking restored: $targetPkg," +

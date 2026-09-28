@@ -319,4 +319,43 @@ public class PackageManagerHelper {
         }
         return false;
     }
+
+    /**
+     * Returns true if the package is installed on the device (even if disabled or in deep sleep).
+     */
+    public boolean isAppInstalled(@Nullable String pkgName, @Nullable UserHandle user) {
+        if (pkgName == null) {
+            return false;
+        }
+        if (user != null) {
+            try {
+                ApplicationInfo ai = mLauncherApps.getApplicationInfo(
+                        pkgName, PackageManager.MATCH_UNINSTALLED_PACKAGES, user);
+                if (ai != null && (ai.flags & ApplicationInfo.FLAG_INSTALLED) != 0) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        try {
+            ApplicationInfo ai = mPm.getApplicationInfo(
+                    pkgName, PackageManager.MATCH_UNINSTALLED_PACKAGES);
+            if (ai != null && (ai.flags & ApplicationInfo.FLAG_INSTALLED) != 0) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            int state = mPm.getApplicationEnabledSetting(pkgName);
+            if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
 }

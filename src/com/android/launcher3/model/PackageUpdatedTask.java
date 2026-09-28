@@ -166,10 +166,10 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                 flagOp = FlagOp.NO_OP.removeFlag(WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE);
                 break;
             case OP_REMOVE: {
-                final LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
+                final PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
                 for (int i = 0; i < packageCount; i++) {
                     ApplicationInfoWrapper wrapper = new ApplicationInfoWrapper(context, packages[i], mUser);
-                    boolean isInstalled = launcherApps != null && launcherApps.isPackageEnabled(packages[i], mUser);
+                    boolean isInstalled = wrapper.isInstalled() || pmHelper.isAppInstalled(packages[i], mUser);
                     if (isInstalled || wrapper.isArchived()) {
                         continue;
                     }
@@ -198,8 +198,10 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                 // Fall through
             }
             case OP_UNAVAILABLE:
+                final PackageManagerHelper pmHelperUnavailable = PackageManagerHelper.INSTANCE.get(context);
                 for (int i = 0; i < packageCount; i++) {
-                    if (new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                    if (new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()
+                            || pmHelperUnavailable.isAppInstalled(packages[i], mUser)) {
                         if (DEBUG) {
                             Log.d(TAG, getOpString() + ": package disabled/frozen, updating package=" + packages[i]);
                         }
@@ -383,18 +385,39 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                                     PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
                                     if (pmHelper.isDeepSleepingOrDisabled(activities.get(0))) {
                                         itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                        itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
                                     } else {
                                         itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                        itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
                                     }
                                 }
                                 iconCache.getTitleAndIcon(
                                         itemInfo, itemInfo.getMatchingLookupFlag());
                                 infoUpdated = true;
                             }
+                        } else if (!isNewApkAvailable && itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
+                            PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
+                            if (pmHelper.isDeepSleepingOrDisabled(packageName, mUser)) {
+                                itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                                itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                infoUpdated = true;
+                            } else if (pmHelper.isAppInstalled(packageName, mUser)) {
+                                itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                                itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                infoUpdated = true;
+                            }
+                            iconCache.getTitleAndIcon(
+                                    itemInfo, itemInfo.getMatchingLookupFlag());
                         }
 
                         int oldRuntimeFlags = itemInfo.runtimeStatusFlags;
                         itemInfo.runtimeStatusFlags = flagOp.apply(itemInfo.runtimeStatusFlags);
+                        PackageManagerHelper pmHelperFlags = PackageManagerHelper.INSTANCE.get(context);
+                        if (pmHelperFlags.isAppInstalled(packageName, mUser)) {
+                            itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                        }
                         if (itemInfo.runtimeStatusFlags != oldRuntimeFlags) {
                             shortcutUpdated = true;
                         }
@@ -433,12 +456,12 @@ public class PackageUpdatedTask implements ModelUpdateTask {
         }
 
         final HashSet<String> removedPackages = new HashSet<>();
+        final PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
         if (mOp == OP_REMOVE) {
-            final LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
             // Only mark packages to be removed if they are uninstalled from the device
             for (int i = 0; i < packageCount; i++) {
                 ApplicationInfoWrapper wrapper = new ApplicationInfoWrapper(context, packages[i], mUser);
-                boolean isInstalled = launcherApps != null && launcherApps.isPackageEnabled(packages[i], mUser);
+                boolean isInstalled = wrapper.isInstalled() || pmHelper.isAppInstalled(packages[i], mUser);
                 if (!isInstalled && !wrapper.isArchived()) {
                     removedPackages.add(packages[i]);
                 }
@@ -449,7 +472,8 @@ public class PackageUpdatedTask implements ModelUpdateTask {
         } else if (mOp == OP_UPDATE) {
             // Disabled/frozen packages are kept if still installed. Only remove if uninstalled.
             for (int i = 0; i < packageCount; i++) {
-                if (!new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()) {
+                if (!new ApplicationInfoWrapper(context, packages[i], mUser).isInstalled()
+                        && !pmHelper.isAppInstalled(packages[i], mUser)) {
                     if (DEBUG) {
                         Log.d(TAG, "OP_UPDATE: package " + packages[i] + " is uninstalled, removing package.");
                     }

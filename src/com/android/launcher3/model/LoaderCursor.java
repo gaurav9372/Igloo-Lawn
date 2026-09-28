@@ -411,7 +411,7 @@ public class LoaderCursor extends CursorWrapper {
         loadWorkspaceTitleAndIcon(useLowResIcon, loadIcon, info);
         // from the db
         if (TextUtils.isEmpty(info.title)) {
-            if (loadIcon) {
+            if (loadIcon || allowMissingTarget) {
                 info.title = getTitle();
 
                 // fall back to the class name of the activity
