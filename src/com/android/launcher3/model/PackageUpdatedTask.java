@@ -380,6 +380,12 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                                 if (activities != null && !activities.isEmpty()) {
                                     itemInfo.setNonResizeable(ApiWrapper.INSTANCE.get(context)
                                             .isNonResizeableActivity(activities.get(0)));
+                                    PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
+                                    if (pmHelper.isDeepSleepingOrDisabled(activities.get(0))) {
+                                        itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                    } else {
+                                        itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                    }
                                 }
                                 iconCache.getTitleAndIcon(
                                         itemInfo, itemInfo.getMatchingLookupFlag());

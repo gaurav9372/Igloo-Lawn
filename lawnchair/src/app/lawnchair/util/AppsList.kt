@@ -92,7 +92,8 @@ fun appsState(
                         val appInfo = ai.applicationInfo ?: continue
                         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                         val state = pm.getApplicationEnabledSetting(pkg)
-                        if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                        if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                            && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
                             continue
                         }
                         val label = ri.loadLabel(pm)

@@ -696,10 +696,12 @@ public class LoaderTask implements Runnable {
                         }
 
                         // For system apps, only include if explicitly disabled by user (COMPONENT_ENABLED_STATE_DISABLED_USER)
+                        // or in deep sleep (COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED)
                         ApplicationInfo appInfo = ri.activityInfo.applicationInfo;
                         boolean isSystemApp = (appInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                         int state = pm.getApplicationEnabledSetting(pkgName);
-                        if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                        if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                                && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
                             continue;
                         }
 
@@ -720,7 +722,11 @@ public class LoaderTask implements Runnable {
                         disabledAppInfo.user = user;
                         disabledAppInfo.intent = AppInfo.makeLaunchIntent(cn);
                         disabledAppInfo.title = label.toString().trim();
-                        disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                            disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
+                        } else {
+                            disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        }
                         if (quietMode) {
                             disabledAppInfo.runtimeStatusFlags |= ItemInfoWithIcon.FLAG_DISABLED_QUIET_USER;
                         }

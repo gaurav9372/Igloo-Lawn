@@ -81,6 +81,8 @@ import com.android.launcher3.ExtendedEditText;
 import com.android.launcher3.Flags;
 import com.android.launcher3.Insettable;
 import com.android.launcher3.InsettableFrameLayout;
+import com.android.launcher3.Launcher;
+import com.android.launcher3.LauncherState;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
 import com.android.launcher3.allapps.BaseAllAppsAdapter.AdapterItem;
@@ -1920,12 +1922,16 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
 
     @Override
     public boolean isDropEnabled() {
-        return true;
+        // This view stays attached while the drawer is closed, so its hit rect can cover the
+        // workspace even though the drawer is not visible.
+        return !(mActivityContext instanceof Launcher launcher)
+                || launcher.isInState(LauncherState.ALL_APPS);
     }
 
     @Override
     public boolean acceptDrop(com.android.launcher3.DropTarget.DragObject dragObject) {
-        return true;
+        return isDropEnabled() && dragObject != null
+                && dragObject.dragInfo instanceof com.android.launcher3.model.data.AppInfo;
     }
 
     @Override
@@ -1987,6 +1993,6 @@ public class ActivityAllAppsContainerView<T extends Context & ActivityContext>
 
     @Override
     public void getHitRectRelativeToDragLayer(android.graphics.Rect outRect) {
-        getGlobalVisibleRect(outRect);
+        mActivityContext.getDragLayer().getDescendantRectRelativeToSelf(this, outRect);
     }
 }

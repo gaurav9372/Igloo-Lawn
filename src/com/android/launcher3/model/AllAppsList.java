@@ -398,7 +398,12 @@ public class AllAppsList {
                     final AppInfo applicationInfo = data.get(i);
                     if (user.equals(applicationInfo.user)
                             && packageName.equals(applicationInfo.componentName.getPackageName())) {
-                        applicationInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        int state = context.getPackageManager().getApplicationEnabledSetting(packageName);
+                        if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                            applicationInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
+                        } else {
+                            applicationInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                        }
                         mIconCache.getTitleAndIcon(applicationInfo, DEFAULT_LOOKUP_FLAG);
                         foundAny = true;
                         mDataChanged = true;
@@ -411,13 +416,14 @@ public class AllAppsList {
                     int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS | PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS;
                     List<ResolveInfo> resolves = context.getPackageManager().queryIntentActivities(mainIntent, pmFlags);
                     if (!resolves.isEmpty()) {
+                        int state = context.getPackageManager().getApplicationEnabledSetting(packageName);
                         ResolveInfo ri = null;
                         for (ResolveInfo r : resolves) {
                             if (r.activityInfo == null) continue;
                             ApplicationInfo appInfo = r.activityInfo.applicationInfo;
                             boolean isSystemApp = (appInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-                            int state = context.getPackageManager().getApplicationEnabledSetting(packageName);
-                            if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                            if (isSystemApp && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                                    && state != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
                                 continue;
                             }
                             CharSequence label = r.loadLabel(context.getPackageManager());
@@ -439,7 +445,11 @@ public class AllAppsList {
                             disabledAppInfo.user = user;
                             disabledAppInfo.intent = AppInfo.makeLaunchIntent(cn);
                             disabledAppInfo.title = ri.loadLabel(context.getPackageManager()).toString().trim();
-                            disabledAppInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                            if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                                disabledAppInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
+                            } else {
+                                disabledAppInfo.runtimeStatusFlags |= com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                            }
                             disabledAppInfo.uid = ri.activityInfo.applicationInfo.uid;
                             add(disabledAppInfo, null, true);
                         }

@@ -238,4 +238,85 @@ public class PackageManagerHelper {
         return app1.getTargetPackage().equals(app2.getTargetPackage())
                 && app1.user.equals(app2.user);
     }
+
+    /**
+     * Returns true if the activity or its application is in deep sleep (e.g. Samsung One UI)
+     * or disabled until used.
+     */
+    public boolean isDeepSleepingOrDisabled(@Nullable LauncherActivityInfo lai) {
+        if (lai == null) {
+            return false;
+        }
+        try {
+            ApplicationInfo appInfo = lai.getApplicationInfo();
+            if (appInfo != null && !appInfo.enabled) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        ComponentName cn = lai.getComponentName();
+        UserHandle user = lai.getUser();
+        if (cn != null && user != null) {
+            try {
+                if (!mLauncherApps.isActivityEnabled(cn, user)) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            String pkgName = cn.getPackageName();
+            try {
+                if (!mLauncherApps.isPackageEnabled(pkgName, user)) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                int state = mPm.getApplicationEnabledSetting(pkgName);
+                if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                int compState = mPm.getComponentEnabledSetting(cn);
+                if (compState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the package is in deep sleep (e.g. Samsung One UI) or disabled until used.
+     */
+    public boolean isDeepSleepingOrDisabled(@Nullable String pkgName, @Nullable UserHandle user) {
+        if (pkgName == null) {
+            return false;
+        }
+        try {
+            int state = mPm.getApplicationEnabledSetting(pkgName);
+            if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        if (user != null) {
+            try {
+                if (!mLauncherApps.isPackageEnabled(pkgName, user)) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                ApplicationInfo ai = mLauncherApps.getApplicationInfo(pkgName, 0, user);
+                if (ai != null && !ai.enabled) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
+    }
 }

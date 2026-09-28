@@ -25,6 +25,7 @@ import static com.android.launcher3.allapps.AlphabeticalAppsList.PRIVATE_SPACE_P
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_FOLDER_OPEN;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_PRIVATE_SPACE_INSTALL_APP_BUTTON_TAP;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_LOCKED_USER;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_QUIET_USER;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_SAFEMODE;
@@ -305,7 +306,8 @@ public class ItemClickHandler {
 
         if ((disabledFlags
                 & ~FLAG_DISABLED_SUSPENDED
-                & ~FLAG_DISABLED_QUIET_USER) == 0) {
+                & ~FLAG_DISABLED_QUIET_USER
+                & ~FLAG_DISABLED_DEEP_SLEEP) == 0) {
             // If the app is only disabled because of the above flags, launch activity anyway.
             // Framework will tell the user why the app is suspended.
             return false;
@@ -403,6 +405,12 @@ public class ItemClickHandler {
         }
         Intent intent = item.getIntent();
         if (item instanceof ItemInfoWithIcon itemInfoWithIcon) {
+            if ((itemInfoWithIcon.runtimeStatusFlags & FLAG_DISABLED_DEEP_SLEEP) != 0) {
+                itemInfoWithIcon.runtimeStatusFlags &= ~FLAG_DISABLED_DEEP_SLEEP;
+                if (v instanceof BubbleTextView btv) {
+                    btv.setIconDisabled(itemInfoWithIcon.isDisabled());
+                }
+            }
             if ((itemInfoWithIcon.runtimeStatusFlags
                     & ItemInfoWithIcon.FLAG_INSTALL_SESSION_ACTIVE) != 0) {
                 String pkg = itemInfoWithIcon.getTargetComponent() != null
