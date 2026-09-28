@@ -167,9 +167,10 @@ class WorkspaceItemProcessor(
             return
         }
         val appInfoWrapper = ApplicationInfoWrapper(context, targetPkg, c.user)
-        val isDeepSleeping = pmHelper.isDeepSleepingOrDisabled(targetPkg, c.user)
-        val isInstalled = isDeepSleeping || appInfoWrapper.isInstalled() || pmHelper.isAppInstalled(targetPkg, c.user)
-        var validTarget = launcherApps.isPackageEnabled(targetPkg, c.user)
+        val disabledFlags = pmHelper.getDisabledFlags(targetPkg, c.user)
+        val isDeepSleepingOrDisabled = disabledFlags != 0
+        val isInstalled = isDeepSleepingOrDisabled || appInfoWrapper.isInstalled() || pmHelper.isAppInstalled(targetPkg, c.user)
+        var validTarget = !isDeepSleepingOrDisabled && launcherApps.isPackageEnabled(targetPkg, c.user)
 
         // If it's a deep shortcut, we'll use pinned shortcuts to restore it
         if (cn != null && validTarget && (c.itemType != Favorites.ITEM_TYPE_DEEP_SHORTCUT)) {
@@ -277,8 +278,8 @@ class WorkspaceItemProcessor(
                     isInstalled -> {
                         // Package is installed on device but currently disabled or deep sleeping.
                         // Keep it on workspace and mark it with the appropriate disabled flag.
-                        if (isDeepSleeping) {
-                            disabledState = disabledState or ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP
+                        if (disabledFlags != 0) {
+                            disabledState = disabledState or disabledFlags
                         } else {
                             disabledState = disabledState or ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER
                         }
@@ -400,6 +401,9 @@ class WorkspaceItemProcessor(
                     ApiWrapper.INSTANCE[context],
                     pmHelper,
                 )
+            }
+            if (disabledFlags != 0) {
+                info.runtimeStatusFlags = info.runtimeStatusFlags or disabledFlags
             }
             try {
                 if (

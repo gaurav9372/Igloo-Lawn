@@ -240,84 +240,105 @@ public class PackageManagerHelper {
     }
 
     /**
-     * Returns true if the activity or its application is in deep sleep (e.g. Samsung One UI)
-     * or disabled until used.
+     * Returns the disabled status flags for the given activity:
+     * FLAG_DISABLED_DEEP_SLEEP for Samsung One UI deep sleeping apps,
+     * FLAG_DISABLED_BY_PUBLISHER for apps disabled via settings or frozen by Hail/IceBox,
+     * or 0 if enabled.
      */
-    public boolean isDeepSleepingOrDisabled(@Nullable LauncherActivityInfo lai) {
+    public int getDisabledFlags(@Nullable LauncherActivityInfo lai) {
         if (lai == null) {
-            return false;
+            return 0;
+        }
+        ComponentName cn = lai.getComponentName();
+        String pkgName = cn != null ? cn.getPackageName() : null;
+        UserHandle user = lai.getUser();
+        int pkgFlags = getDisabledFlags(pkgName, user);
+        if (pkgFlags != 0) {
+            return pkgFlags;
         }
         try {
             ApplicationInfo appInfo = lai.getApplicationInfo();
             if (appInfo != null && !appInfo.enabled) {
-                return true;
+                return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
             }
         } catch (Throwable ignored) {
         }
-        ComponentName cn = lai.getComponentName();
-        UserHandle user = lai.getUser();
-        if (cn != null && user != null) {
-            try {
-                if (!mLauncherApps.isActivityEnabled(cn, user)) {
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
-            String pkgName = cn.getPackageName();
-            try {
-                if (!mLauncherApps.isPackageEnabled(pkgName, user)) {
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
-            try {
-                int state = mPm.getApplicationEnabledSetting(pkgName);
-                if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
+        if (cn != null) {
             try {
                 int compState = mPm.getComponentEnabledSetting(cn);
                 if (compState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
-                    return true;
+                    return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
+                }
+                if (compState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                        || compState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                    return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
                 }
             } catch (Throwable ignored) {
             }
         }
-        return false;
+        if (cn != null && user != null) {
+            try {
+                if (!mLauncherApps.isActivityEnabled(cn, user)) {
+                    return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return 0;
     }
 
     /**
-     * Returns true if the package is in deep sleep (e.g. Samsung One UI) or disabled until used.
+     * Returns true if the activity or its application is in deep sleep (e.g. Samsung One UI)
+     * or disabled until used.
      */
-    public boolean isDeepSleepingOrDisabled(@Nullable String pkgName, @Nullable UserHandle user) {
+    public boolean isDeepSleepingOrDisabled(@Nullable LauncherActivityInfo lai) {
+        return getDisabledFlags(lai) != 0;
+    }
+
+    /**
+     * Returns the disabled status flags for the given package:
+     * FLAG_DISABLED_DEEP_SLEEP for Samsung One UI deep sleeping apps,
+     * FLAG_DISABLED_BY_PUBLISHER for apps disabled via settings or frozen by Hail/IceBox,
+     * or 0 if enabled.
+     */
+    public int getDisabledFlags(@Nullable String pkgName, @Nullable UserHandle user) {
         if (pkgName == null) {
-            return false;
+            return 0;
         }
         try {
             int state = mPm.getApplicationEnabledSetting(pkgName);
             if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
-                return true;
+                return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
+            }
+            if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
             }
         } catch (Throwable ignored) {
         }
         if (user != null) {
             try {
                 if (!mLauncherApps.isPackageEnabled(pkgName, user)) {
-                    return true;
+                    return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
                 }
             } catch (Throwable ignored) {
             }
             try {
                 ApplicationInfo ai = mLauncherApps.getApplicationInfo(pkgName, 0, user);
                 if (ai != null && !ai.enabled) {
-                    return true;
+                    return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
                 }
             } catch (Throwable ignored) {
             }
         }
-        return false;
+        return 0;
+    }
+
+    /**
+     * Returns true if the package is in deep sleep (e.g. Samsung One UI) or disabled until used.
+     */
+    public boolean isDeepSleepingOrDisabled(@Nullable String pkgName, @Nullable UserHandle user) {
+        return getDisabledFlags(pkgName, user) != 0;
     }
 
     /**

@@ -198,11 +198,17 @@ public class AppInfo extends ItemInfoWithIcon implements WorkspaceItemFactory {
         } else {
             info.runtimeStatusFlags &= ~FLAG_DISABLED_SUSPENDED;
         }
-        if ((pmHelper != null && pmHelper.isDeepSleepingOrDisabled(lai))
-                || (lai.getApplicationInfo() != null && !lai.getApplicationInfo().enabled)) {
-            info.runtimeStatusFlags |= FLAG_DISABLED_DEEP_SLEEP;
+        int disabledFlags = pmHelper != null ? pmHelper.getDisabledFlags(lai) : 0;
+        if (disabledFlags != 0) {
+            info.runtimeStatusFlags |= disabledFlags;
+            if ((disabledFlags & FLAG_DISABLED_DEEP_SLEEP) != 0) {
+                info.runtimeStatusFlags &= ~FLAG_DISABLED_BY_PUBLISHER;
+            } else {
+                info.runtimeStatusFlags &= ~FLAG_DISABLED_DEEP_SLEEP;
+            }
         } else {
             info.runtimeStatusFlags &= ~FLAG_DISABLED_DEEP_SLEEP;
+            info.runtimeStatusFlags &= ~FLAG_DISABLED_BY_PUBLISHER;
         }
         if (Utilities.ATLEAST_V && Flags.enableSupportForArchiving()) {
             try {

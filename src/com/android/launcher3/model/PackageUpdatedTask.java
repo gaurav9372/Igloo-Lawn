@@ -378,31 +378,50 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                                 // LC-Ignored
                             }
 
+                            PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
+                            int disabledFlags = pmHelper.getDisabledFlags(packageName, mUser);
+                            boolean isInstalled = pmHelper.isAppInstalled(packageName, mUser);
+
                             if (itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
-                                if (activities != null && !activities.isEmpty()) {
+                                if (activities != null && !activities.isEmpty() && disabledFlags == 0) {
                                     itemInfo.setNonResizeable(ApiWrapper.INSTANCE.get(context)
                                             .isNonResizeableActivity(activities.get(0)));
-                                    PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
-                                    if (pmHelper.isDeepSleepingOrDisabled(activities.get(0))) {
-                                        itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                                    infoUpdated = true;
+                                } else if (disabledFlags != 0) {
+                                    itemInfo.runtimeStatusFlags |= disabledFlags;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                                    if ((disabledFlags & WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP) != 0) {
                                         itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
                                     } else {
                                         itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
-                                        itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
                                     }
+                                    infoUpdated = true;
+                                } else if (isInstalled && (activities == null || activities.isEmpty())) {
+                                    itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                    infoUpdated = true;
                                 }
                                 iconCache.getTitleAndIcon(
                                         itemInfo, itemInfo.getMatchingLookupFlag());
-                                infoUpdated = true;
                             }
                         } else if (!isNewApkAvailable && itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
                             PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
-                            if (pmHelper.isDeepSleepingOrDisabled(packageName, mUser)) {
-                                itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                            int disabledFlags = pmHelper.getDisabledFlags(packageName, mUser);
+                            boolean isInstalled = pmHelper.isAppInstalled(packageName, mUser);
+                            if (disabledFlags != 0) {
+                                itemInfo.runtimeStatusFlags |= disabledFlags;
                                 itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
-                                itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                if ((disabledFlags & WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP) != 0) {
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
+                                } else {
+                                    itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
+                                }
                                 infoUpdated = true;
-                            } else if (pmHelper.isAppInstalled(packageName, mUser)) {
+                            } else if (isInstalled) {
                                 itemInfo.runtimeStatusFlags |= WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER;
                                 itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE;
                                 itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;

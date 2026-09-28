@@ -504,6 +504,7 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
 
     protected void setItemInfo(ItemInfoWithIcon itemInfo) {
         setTag(itemInfo);
+        setIconDisabled(isIconDisabled(itemInfo));
         // Lawnchair: Icon swipe gesture feature
         mGestureListener = shouldSupportIconSwipeGestures()
                 ? new IconGestureListener(this, pref2, itemInfo.getComponentKey())
@@ -519,6 +520,7 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
         }
         applyLabel(info);
         maybeApplyProgressLevel(info, oldIcon);
+        setIconDisabled(isIconDisabled(info));
     }
 
     /**
