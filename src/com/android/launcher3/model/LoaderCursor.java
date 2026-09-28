@@ -449,7 +449,9 @@ public class LoaderCursor extends CursorWrapper {
             if (mIconCache.isDefaultIcon(info.bitmap, user)) {
                 Log.d(TAG, "Default Icon found in cache, trying DB instead. "
                         + " Component=" + info.getTargetComponent());
-                loadIconFromDb(info);
+                if (!loadIconFromDb(info)) {
+                    mIconCache.loadFallbackIconForDisabledApp(info, null);
+                }
             }
         }
     }

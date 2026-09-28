@@ -32,6 +32,11 @@ import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageInstaller;
 import android.content.pm.ShortcutInfo;
+import android.content.ContentValues;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.drawable.Drawable;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
 import android.os.Looper;
@@ -46,6 +51,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.util.Pair;
+
+import com.android.launcher3.util.PackageManagerHelper;
 
 import com.android.launcher3.Flags;
 import com.android.launcher3.InvariantDeviceProfile;
@@ -112,6 +119,7 @@ public class IconCache extends BaseIconCache {
     private final InstantAppResolver mInstantAppResolver;
     private final CancellableTask mCancelledTask;
     private final LauncherIcons.IconPool mIconPool;
+    private final IconProvider mIconProvider;
 
     private final SparseArray<BitmapInfo> mWidgetCategoryBitmapInfos;
 
@@ -134,6 +142,7 @@ public class IconCache extends BaseIconCache {
         mUserManager = userCache;
         mInstallSessionHelper = installSessionHelper;
         mIconPool = iconPool;
+        mIconProvider = iconProvider;
 
         mInstantAppResolver = instantAppResolver;
         mWidgetCategoryBitmapInfos = new SparseArray<>();
@@ -159,6 +168,7 @@ public class IconCache extends BaseIconCache {
         mUserManager = userCache;
         mInstallSessionHelper = installSessionHelper;
         mIconPool = iconPool;
+        mIconProvider = iconProvider;
 
         mInstantAppResolver = InstantAppResolver.newInstance(context);
         mWidgetCategoryBitmapInfos = new SparseArray<>();
@@ -196,6 +206,13 @@ public class IconCache extends BaseIconCache {
             if (Flags.restoreArchivedAppIconsFromDb()
                     && apps.stream().anyMatch(app -> app.getApplicationInfo().isArchived)) {
                 // When archiving app icon, don't delete old icon so it can be re-used.
+                return;
+            }
+        }
+        if (apps.isEmpty()) {
+            PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
+            if (pmHelper.isAppInstalled(packageName, user) || pmHelper.isDeepSleepingOrDisabled(packageName, user)) {
+                loadAndCacheDisabledPackage(packageName, user);
                 return;
             }
         }
@@ -286,7 +303,7 @@ public class IconCache extends BaseIconCache {
         boolean isAppArchived = Utilities.ATLEAST_V && (Flags.enableSupportForArchiving() && activityInfo != null
                 && activityInfo.getActivityInfo().isArchived);
         // If we already have activity info, no need to use package icon
-        getTitleAndIcon(info, () -> activityInfo, lookupFlag.withUsePackageIcon(isAppArchived));
+        getTitleAndIcon(info, () -> activityInfo, lookupFlag.withUsePackageIcon(isAppArchived || activityInfo == null));
     }
 
     /**
@@ -571,7 +588,7 @@ public class IconCache extends BaseIconCache {
                             lai,
                             entry,
                         LawnchairActivityCachingLogic.INSTANCE.get(context),
-                            DEFAULT_LOOKUP_FLAG.withUsePackageIcon(false),
+                            DEFAULT_LOOKUP_FLAG.withUsePackageIcon(lai == null),
                             /* usePackageTitle= */ loadFallbackTitle,
                             cn,
                             sectionKey.first);
@@ -582,6 +599,9 @@ public class IconCache extends BaseIconCache {
                             entry,
                         LawnchairActivityCachingLogic.INSTANCE.get(context),
                             sectionKey.first);
+                }
+                if (entry.bitmap == null || isDefaultIcon(entry.bitmap, sectionKey.first)) {
+                    loadFallbackIconForDisabledApp(itemInfo, entry);
                 }
 
                 for (IconRequestInfo<T> iconRequest : duplicateIconRequestsMap.get(cn)) {
@@ -642,6 +662,9 @@ public class IconCache extends BaseIconCache {
         info.bitmap = entry.bitmap;
         // Clear any previously set appTitle, if the packageOverride is no longer valid
         info.appTitle = null;
+        if (entry.bitmap == null || isDefaultIcon(entry.bitmap, info.user)) {
+            loadFallbackIconForDisabledApp(info, entry);
+        }
         if (entry.bitmap == null) {
             // TODO: entry.bitmap can never be null, so this should not happen at all.
             Log.wtf(TAG, "Cannot find bitmap from the cache, default icon was loaded.");
@@ -683,6 +706,253 @@ public class IconCache extends BaseIconCache {
     public interface ItemInfoUpdateReceiver {
 
         void reapplyItemInfo(ItemInfoWithIcon info);
+    }
+
+    public void loadFallbackIconForDisabledApp(@NonNull ItemInfoWithIcon info, @Nullable CacheEntry entry) {
+        ComponentName cn = info.getTargetComponent();
+        Intent intent = info.getIntent();
+        if (cn == null && intent != null) {
+            cn = intent.getComponent();
+        }
+        String pkgName = cn != null ? cn.getPackageName() : info.getTargetPackage();
+        if (pkgName == null && intent != null) {
+            pkgName = intent.getPackage();
+        }
+        if (pkgName == null) {
+            return;
+        }
+        UserHandle user = info.user != null ? info.user : android.os.Process.myUserHandle();
+        try {
+            int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS
+                    | PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+                    | PackageManager.MATCH_DIRECT_BOOT_AWARE
+                    | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
+            PackageManager pm = context.getPackageManager();
+            ActivityInfo activityInfo = null;
+            if (cn != null) {
+                try {
+                    activityInfo = pm.getActivityInfo(cn, pmFlags);
+                } catch (Exception ignored) {
+                }
+            }
+            if (activityInfo == null) {
+                Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+                mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                mainIntent.setPackage(pkgName);
+                List<ResolveInfo> resolves = pm.queryIntentActivities(mainIntent, pmFlags);
+                if (resolves != null && !resolves.isEmpty()) {
+                    for (ResolveInfo r : resolves) {
+                        if (r.activityInfo != null) {
+                            activityInfo = r.activityInfo;
+                            if (cn == null) {
+                                cn = new ComponentName(r.activityInfo.packageName, r.activityInfo.name);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Drawable iconDrawable = null;
+            if (activityInfo != null) {
+                try (LauncherIcons li = mIconPool.obtain()) {
+                    iconDrawable = mIconProvider.getIcon(activityInfo, li.getFullResIconDpi());
+                } catch (Exception ignored) {
+                }
+                if (iconDrawable == null) {
+                    try {
+                        iconDrawable = activityInfo.loadIcon(pm);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            if (iconDrawable == null) {
+                try {
+                    ApplicationInfo appInfo = pm.getApplicationInfo(pkgName, pmFlags);
+                    if (appInfo != null) {
+                        try (LauncherIcons li = mIconPool.obtain()) {
+                            iconDrawable = mIconProvider.getIcon(appInfo, li.getFullResIconDpi());
+                        } catch (Exception ignored) {
+                        }
+                        if (iconDrawable == null) {
+                            iconDrawable = appInfo.loadIcon(pm);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (iconDrawable != null) {
+                try (LauncherIcons li = mIconPool.obtain()) {
+                    BaseIconFactory.IconOptions iconOptions = new BaseIconFactory.IconOptions().setUser(user);
+                    BitmapInfo iconInfo = li.createBadgedIconBitmap(iconDrawable, iconOptions);
+                    if (entry != null) {
+                        entry.bitmap = iconInfo;
+                    }
+                    info.bitmap = iconInfo;
+
+                    CharSequence label = null;
+                    if (activityInfo != null) {
+                        try {
+                            label = activityInfo.loadLabel(pm);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (label == null) {
+                        try {
+                            ApplicationInfo appInfo = pm.getApplicationInfo(pkgName, pmFlags);
+                            if (appInfo != null) {
+                                label = appInfo.loadLabel(pm);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (label != null) {
+                        String titleStr = label.toString().trim();
+                        if (entry != null && TextUtils.isEmpty(entry.title)) {
+                            entry.title = titleStr;
+                            entry.contentDescription = getUserBadgedLabel(titleStr, user);
+                        }
+                        if (TextUtils.isEmpty(info.title)) {
+                            info.title = Utilities.trim(titleStr);
+                            info.contentDescription = getUserBadgedLabel(titleStr, user);
+                        }
+                    }
+
+                    if (cn != null) {
+                        long userSerial = mUserManager.getSerialNumberForUser(user);
+                        String freshnessId = mIconProvider.getStateForApp(
+                                activityInfo != null ? activityInfo.applicationInfo : null);
+                        if (freshnessId == null) {
+                            freshnessId = "";
+                        }
+                        String labelToSave = label != null ? label.toString() : (entry != null && entry.title != null ? entry.title.toString() : "");
+                        saveIconToDb(iconInfo, labelToSave, cn, userSerial, freshnessId);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to load fallback icon for disabled app: " + pkgName, t);
+        }
+    }
+
+    private void loadAndCacheDisabledPackage(@NonNull String packageName, @NonNull UserHandle user) {
+        try {
+            int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS
+                    | PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+                    | PackageManager.MATCH_DIRECT_BOOT_AWARE
+                    | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
+            PackageManager pm = context.getPackageManager();
+            Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+            mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+            mainIntent.setPackage(packageName);
+            List<ResolveInfo> resolves = pm.queryIntentActivities(mainIntent, pmFlags);
+            long userSerial = mUserManager.getSerialNumberForUser(user);
+
+            if (resolves != null && !resolves.isEmpty()) {
+                for (ResolveInfo ri : resolves) {
+                    if (ri.activityInfo != null) {
+                        ComponentName cn = new ComponentName(ri.activityInfo.packageName, ri.activityInfo.name);
+                        loadAndCacheDisabledComponent(cn, ri.activityInfo, user, userSerial);
+                    }
+                }
+            } else {
+                try {
+                    ApplicationInfo appInfo = pm.getApplicationInfo(packageName, pmFlags);
+                    if (appInfo != null) {
+                        ComponentName cn = new ComponentName(packageName, "");
+                        loadAndCacheDisabledAppInfo(cn, appInfo, user, userSerial);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to load and cache disabled package: " + packageName, t);
+        }
+    }
+
+    private void loadAndCacheDisabledComponent(@NonNull ComponentName cn,
+            @NonNull ActivityInfo activityInfo, @NonNull UserHandle user, long userSerial) {
+        try {
+            Drawable iconDrawable = null;
+            try (LauncherIcons li = mIconPool.obtain()) {
+                iconDrawable = mIconProvider.getIcon(activityInfo, li.getFullResIconDpi());
+            } catch (Exception ignored) {
+            }
+            if (iconDrawable == null) {
+                iconDrawable = activityInfo.loadIcon(context.getPackageManager());
+            }
+            if (iconDrawable == null) {
+                return;
+            }
+            try (LauncherIcons li = mIconPool.obtain()) {
+                BaseIconFactory.IconOptions iconOptions = new BaseIconFactory.IconOptions().setUser(user);
+                BitmapInfo iconInfo = li.createBadgedIconBitmap(iconDrawable, iconOptions);
+                CharSequence label = activityInfo.loadLabel(context.getPackageManager());
+                String title = label != null ? label.toString().trim() : cn.getPackageName();
+                String freshnessId = mIconProvider.getStateForApp(activityInfo.applicationInfo);
+                if (freshnessId == null) {
+                    freshnessId = "";
+                }
+                saveIconToDb(iconInfo, title, cn, userSerial, freshnessId);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Error caching disabled component: " + cn, t);
+        }
+    }
+
+    private void loadAndCacheDisabledAppInfo(@NonNull ComponentName cn,
+            @NonNull ApplicationInfo appInfo, @NonNull UserHandle user, long userSerial) {
+        try {
+            Drawable iconDrawable = null;
+            try (LauncherIcons li = mIconPool.obtain()) {
+                iconDrawable = mIconProvider.getIcon(appInfo, li.getFullResIconDpi());
+            } catch (Exception ignored) {
+            }
+            if (iconDrawable == null) {
+                iconDrawable = appInfo.loadIcon(context.getPackageManager());
+            }
+            if (iconDrawable == null) {
+                return;
+            }
+            try (LauncherIcons li = mIconPool.obtain()) {
+                BaseIconFactory.IconOptions iconOptions = new BaseIconFactory.IconOptions().setUser(user);
+                BitmapInfo iconInfo = li.createBadgedIconBitmap(iconDrawable, iconOptions);
+                CharSequence label = appInfo.loadLabel(context.getPackageManager());
+                String title = label != null ? label.toString().trim() : cn.getPackageName();
+                String freshnessId = mIconProvider.getStateForApp(appInfo);
+                if (freshnessId == null) {
+                    freshnessId = "";
+                }
+                saveIconToDb(iconInfo, title, cn, userSerial, freshnessId);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Error caching disabled appInfo: " + cn, t);
+        }
+    }
+
+    private void saveIconToDb(@NonNull BitmapInfo bitmapInfo, @NonNull String title,
+            @NonNull ComponentName cn, long userSerial, @NonNull String freshnessId) {
+        try {
+            ContentValues values = new ContentValues();
+            if (bitmapInfo.canPersist()) {
+                values.put(BaseIconCache.COLUMN_ICON, GraphicsUtils.flattenBitmap(bitmapInfo.icon));
+                values.put(BaseIconCache.COLUMN_MONO_ICON,
+                        bitmapInfo.getThemedBitmap() != null ? bitmapInfo.getThemedBitmap().serialize() : null);
+            } else {
+                values.put(BaseIconCache.COLUMN_ICON, (byte[]) null);
+                values.put(BaseIconCache.COLUMN_MONO_ICON, (byte[]) null);
+            }
+            values.put(BaseIconCache.COLUMN_ICON_COLOR, bitmapInfo.color);
+            values.put(BaseIconCache.COLUMN_FLAGS, bitmapInfo.flags);
+            values.put(BaseIconCache.COLUMN_LABEL, title);
+            values.put(BaseIconCache.COLUMN_COMPONENT, cn.flattenToString());
+            values.put(BaseIconCache.COLUMN_USER, userSerial);
+            values.put(BaseIconCache.COLUMN_FRESHNESS_ID, freshnessId);
+            iconDb.insertOrReplace(values);
+        } catch (Throwable t) {
+            Log.w(TAG, "Error saving icon to db for " + cn, t);
+        }
     }
 
     /** Log persistently to FileLog.d for debugging. */

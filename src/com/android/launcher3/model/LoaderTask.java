@@ -735,7 +735,7 @@ public class LoaderTask implements Runnable {
                         IconRequestInfo<AppInfo> iconRequestInfo = new IconRequestInfo<>(
                                 disabledAppInfo,
                                 /* launcherActivityInfo= */ null,
-                                disabledAppInfo.getMatchingLookupFlag().withThemeIcon(false));
+                                disabledAppInfo.getMatchingLookupFlag().withUseLowRes(false));
                         allAppsItemRequestInfos.add(iconRequestInfo);
                         mBgAllAppsList.add(disabledAppInfo, null, false);
                         processedDisabledPackages.add(pkgName);
