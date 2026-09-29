@@ -16,9 +16,12 @@
 
 package app.lawnchair.report
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.SystemClock
 import java.time.Instant
 import java.time.LocalDate
@@ -42,17 +45,22 @@ data class DayReport(
     val dateKey: String,
     val displayDate: String,
     val totalRuntimeSeconds: Long,
-    val restartCount: Int,
-    val lastRestartTime: String,
-    val lastKilledTime: String,
-    val batteryForeground: String,
-    val batteryBackground: String,
+    val processStartCount: Int,
+    val lastProcessStartTime: String,
+    val processExitCount: Int,
+    val lowMemoryExitCount: Int,
+    val crashExitCount: Int,
+    val lastExitTime: String,
+    val lastExitReason: String,
+    val lastExitMemory: String,
     val topClickedApps: List<AppClickCount>,
     val totalAppsInDrawer: Int,
 )
 
 object LawnchairReportRepository {
     private const val PREF_NAME = "lawnchair_report_stats"
+    private const val RETENTION_DAYS = 15L
+    private const val LAST_PROCESSED_EXIT = "last_processed_exit"
     private var resumedTimeMillis: Long = 0L
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -63,15 +71,19 @@ object LawnchairReportRepository {
         return LocalDate.now().toString() // YYYY-MM-DD
     }
 
+    @Synchronized
     fun onLauncherRestarted(context: Context) {
+        pruneExpiredStats(context)
+        recordPreviousProcessExit(context)
+
         val today = getTodayKey()
         val prefs = getPrefs(context)
-        val currentRestarts = prefs.getInt("${today}_restarts", 0)
+        val currentStarts = prefs.getInt("${today}_process_starts", 0)
         val now = System.currentTimeMillis()
 
         prefs.edit()
-            .putInt("${today}_restarts", currentRestarts + 1)
-            .putLong("${today}_last_restart", now)
+            .putInt("${today}_process_starts", currentStarts + 1)
+            .putLong("${today}_last_process_start", now)
             .apply()
     }
 
@@ -81,14 +93,7 @@ object LawnchairReportRepository {
         }
     }
 
-    fun onLauncherStopped(context: Context) {
-        onLauncherPaused(context)
-        val today = getTodayKey()
-        val prefs = getPrefs(context)
-        val now = System.currentTimeMillis()
-        prefs.edit().putLong("${today}_last_killed", now).apply()
-    }
-
+    @Synchronized
     fun onLauncherPaused(context: Context) {
         if (resumedTimeMillis > 0) {
             val elapsed = (SystemClock.elapsedRealtime() - resumedTimeMillis) / 1000
@@ -98,8 +103,81 @@ object LawnchairReportRepository {
                 val currentRuntime = prefs.getLong("${today}_runtime", 0L)
                 prefs.edit().putLong("${today}_runtime", currentRuntime + elapsed).apply()
             }
-            resumedTimeMillis = SystemClock.elapsedRealtime()
+            resumedTimeMillis = 0L
         }
+    }
+
+    private fun pruneExpiredStats(context: Context) {
+        val prefs = getPrefs(context)
+        val cutoff = LocalDate.now().minusDays(RETENTION_DAYS - 1)
+        val editor = prefs.edit()
+        var changed = false
+
+        prefs.all.keys.forEach { key ->
+            if (key.length < 10) return@forEach
+            val date = runCatching { LocalDate.parse(key.substring(0, 10)) }.getOrNull()
+                ?: return@forEach
+            if (date.isBefore(cutoff)) {
+                editor.remove(key)
+                changed = true
+            }
+        }
+        if (changed) editor.apply()
+    }
+
+    private fun recordPreviousProcessExit(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        val activityManager = context.getSystemService(ActivityManager::class.java) ?: return
+        val exit = runCatching {
+            activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 10)
+                .firstOrNull { it.processName == context.packageName }
+        }.getOrNull() ?: return
+
+        val prefs = getPrefs(context)
+        val fingerprint = "${exit.timestamp}:${exit.pid}:${exit.reason}"
+        if (prefs.getString(LAST_PROCESSED_EXIT, null) == fingerprint) return
+
+        val dateKey = Instant.ofEpochMilli(exit.timestamp)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .toString()
+        val exitCount = prefs.getInt("${dateKey}_process_exits", 0) + 1
+        val lowMemoryCount = prefs.getInt("${dateKey}_low_memory_exits", 0) +
+            if (exit.reason == ApplicationExitInfo.REASON_LOW_MEMORY) 1 else 0
+        val crashCount = prefs.getInt("${dateKey}_crash_exits", 0) +
+            if (
+                exit.reason == ApplicationExitInfo.REASON_CRASH ||
+                exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                exit.reason == ApplicationExitInfo.REASON_ANR
+            ) 1 else 0
+
+        prefs.edit()
+            .putString(LAST_PROCESSED_EXIT, fingerprint)
+            .putInt("${dateKey}_process_exits", exitCount)
+            .putInt("${dateKey}_low_memory_exits", lowMemoryCount)
+            .putInt("${dateKey}_crash_exits", crashCount)
+            .putLong("${dateKey}_last_exit", exit.timestamp)
+            .putString("${dateKey}_last_exit_reason", describeExitReason(exit.reason))
+            .putLong("${dateKey}_last_exit_pss_kb", exit.pss)
+            .putLong("${dateKey}_last_exit_rss_kb", exit.rss)
+            .apply()
+    }
+
+    private fun describeExitReason(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "Low memory"
+        ApplicationExitInfo.REASON_CRASH -> "Java crash"
+        ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native crash"
+        ApplicationExitInfo.REASON_ANR -> "App not responding"
+        ApplicationExitInfo.REASON_EXIT_SELF -> "Launcher requested restart"
+        ApplicationExitInfo.REASON_USER_REQUESTED -> "User or system requested stop"
+        ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "Package updated"
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "Permission changed"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Excessive resource use"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Initialization failure"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "Dependency died"
+        ApplicationExitInfo.REASON_SIGNALED -> "Process signal"
+        else -> "Other ($reason)"
     }
 
     fun isLauncherPackage(context: Context, packageName: String, appTitle: String = ""): Boolean {
@@ -204,22 +282,33 @@ object LawnchairReportRepository {
                 runtime += liveElapsed
             }
         }
-        val restarts = prefs.getInt("${dateKey}_restarts", 0)
-        val lastRestartMillis = prefs.getLong("${dateKey}_last_restart", 0L)
+        val processStarts = prefs.getInt("${dateKey}_process_starts", 0)
+        val lastProcessStartMillis = prefs.getLong("${dateKey}_last_process_start", 0L)
 
-        val lastRestartStr = if (lastRestartMillis > 0) {
+        val lastProcessStartStr = if (lastProcessStartMillis > 0) {
             val formatter = DateTimeFormatter.ofPattern("dd MMM, yyyy | hh:mm:ss a", Locale.ENGLISH)
-            Instant.ofEpochMilli(lastRestartMillis).atZone(ZoneId.systemDefault()).format(formatter)
+            Instant.ofEpochMilli(lastProcessStartMillis).atZone(ZoneId.systemDefault()).format(formatter)
         } else {
             "N/A"
         }
 
-        val lastKilledMillis = prefs.getLong("${dateKey}_last_killed", 0L)
-        val lastKilledStr = if (lastKilledMillis > 0) {
+        val processExits = prefs.getInt("${dateKey}_process_exits", 0)
+        val lowMemoryExits = prefs.getInt("${dateKey}_low_memory_exits", 0)
+        val crashExits = prefs.getInt("${dateKey}_crash_exits", 0)
+        val lastExitMillis = prefs.getLong("${dateKey}_last_exit", 0L)
+        val lastExitStr = if (lastExitMillis > 0) {
             val formatter = DateTimeFormatter.ofPattern("dd MMM, yyyy | hh:mm:ss a", Locale.ENGLISH)
-            Instant.ofEpochMilli(lastKilledMillis).atZone(ZoneId.systemDefault()).format(formatter)
+            Instant.ofEpochMilli(lastExitMillis).atZone(ZoneId.systemDefault()).format(formatter)
         } else {
             "N/A"
+        }
+        val lastExitReason = prefs.getString("${dateKey}_last_exit_reason", null) ?: "N/A"
+        val lastExitPssKb = prefs.getLong("${dateKey}_last_exit_pss_kb", 0L)
+        val lastExitRssKb = prefs.getLong("${dateKey}_last_exit_rss_kb", 0L)
+        val lastExitMemory = when {
+            lastExitPssKb > 0 -> "${lastExitPssKb / 1024} MB PSS"
+            lastExitRssKb > 0 -> "${lastExitRssKb / 1024} MB RSS"
+            else -> "Memory unavailable"
         }
 
         // Top 10 most clicked apps across the last 15 days (excluding launcher app itself)
@@ -228,10 +317,6 @@ object LawnchairReportRepository {
         // Total apps count
         val totalApps = getTotalAppsCount(context)
 
-        // Estimated Battery stats calculation
-        val fgBattery = if (runtime > 0) String.format(Locale.ENGLISH, "%.1f%%", (runtime / 3600.0) * 1.8 + 0.1) else "0.0%"
-        val bgBattery = String.format(Locale.ENGLISH, "%.1f%%", (restarts * 0.05) + 0.1)
-
         val dateOption = getDateOptions().find { it.key == dateKey }
         val displayDate = dateOption?.label ?: dateKey
 
@@ -239,11 +324,14 @@ object LawnchairReportRepository {
             dateKey = dateKey,
             displayDate = displayDate,
             totalRuntimeSeconds = runtime,
-            restartCount = restarts,
-            lastRestartTime = lastRestartStr,
-            lastKilledTime = lastKilledStr,
-            batteryForeground = fgBattery,
-            batteryBackground = bgBattery,
+            processStartCount = processStarts,
+            lastProcessStartTime = lastProcessStartStr,
+            processExitCount = processExits,
+            lowMemoryExitCount = lowMemoryExits,
+            crashExitCount = crashExits,
+            lastExitTime = lastExitStr,
+            lastExitReason = lastExitReason,
+            lastExitMemory = lastExitMemory,
             topClickedApps = top10,
             totalAppsInDrawer = totalApps,
         )

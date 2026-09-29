@@ -147,8 +147,6 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_1_3)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
-                .fallbackToDestructiveMigration()
-                .fallbackToDestructiveMigrationOnDowngrade()
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()
         }

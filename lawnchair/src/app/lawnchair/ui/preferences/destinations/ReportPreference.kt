@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ArrowDropDown
-import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
@@ -156,9 +155,9 @@ fun ReportPreference() {
                     MetricCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Rounded.Refresh,
-                        title = "Restarts",
-                        value = "${report.restartCount} times",
-                        subtitle = "Last: ${report.lastRestartTime}",
+                        title = "Process Starts",
+                        value = "${report.processStartCount} times",
+                        subtitle = "Last: ${report.lastProcessStartTime}",
                     )
                 }
 
@@ -168,17 +167,17 @@ fun ReportPreference() {
                 ) {
                     MetricCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Rounded.BatteryChargingFull,
-                        title = "Battery Consumed",
-                        value = "${report.batteryForeground} FG",
-                        subtitle = "${report.batteryBackground} BG",
+                        icon = Icons.Rounded.PowerSettingsNew,
+                        title = "Process Exits",
+                        value = "${report.lowMemoryExitCount} low-memory",
+                        subtitle = "${report.crashExitCount} crashes / ${report.processExitCount} total",
                     )
                     MetricCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Rounded.PowerSettingsNew,
-                        title = "Last Killed",
-                        value = report.lastKilledTime,
-                        subtitle = "App closed timestamp",
+                        title = "Last Exit",
+                        value = report.lastExitTime,
+                        subtitle = "${report.lastExitReason} • ${report.lastExitMemory}",
                     )
                 }
 

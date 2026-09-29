@@ -1,13 +1,13 @@
 package app.lawnchair.data.wallpaper.model
 
 import android.app.Application
-import android.app.WallpaperManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.lawnchair.data.wallpaper.Wallpaper
 import app.lawnchair.wallpaper.WallpaperManagerCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -19,12 +19,13 @@ class WallpaperViewModel(application: Application) : AndroidViewModel(applicatio
         field = MutableStateFlow<List<Wallpaper>>(emptyList())
 
     private val mutex = Mutex()
+    private var disposed = false
 
     private val listener = object : WallpaperManagerCompat.OnColorsChangedListener {
         override fun onColorsChanged() {
             viewModelScope.launch {
                 mutex.withLock {
-                    saveWallpaper(wallpaperManagerCompat.wallpaperManager)
+                    refreshWallpapers()
                 }
             }
         }
@@ -33,11 +34,6 @@ class WallpaperViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         loadTopWallpapers()
         wallpaperManagerCompat.addOnChangeListener(listener)
-    }
-
-    private suspend fun saveWallpaper(wallpaperManager: WallpaperManager) {
-        wallpaperManagerCompat.service.saveWallpaper(wallpaperManager)
-        refreshWallpapers()
     }
 
     private suspend fun refreshWallpapers() {
@@ -56,5 +52,17 @@ class WallpaperViewModel(application: Application) : AndroidViewModel(applicatio
     suspend fun updateWallpaperRank(wallpaper: Wallpaper) {
         wallpaperManagerCompat.service.updateWallpaperRank(wallpaper)
         loadTopWallpapers()
+    }
+
+    fun dispose() {
+        if (disposed) return
+        disposed = true
+        wallpaperManagerCompat.removeOnChangeListener(listener)
+        viewModelScope.coroutineContext.cancelChildren()
+    }
+
+    override fun onCleared() {
+        dispose()
+        super.onCleared()
     }
 }

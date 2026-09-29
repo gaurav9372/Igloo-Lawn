@@ -26,6 +26,7 @@ import app.lawnchair.views.component.IconFrame
 import com.android.launcher3.R
 import com.android.launcher3.util.Themes
 import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -160,14 +161,16 @@ class WallpaperCarouselView @JvmOverloads constructor(
         currentCardView.removeView(iconFrame)
         currentCardView.addView(spinner)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        viewScope.launch(Dispatchers.IO) {
             try {
-                WallpaperManager.getInstance(context).setBitmap(
-                    BitmapFactory.decodeFile(wallpaper.imagePath),
-                    null,
-                    true,
-                    WallpaperManager.FLAG_SYSTEM,
-                )
+                FileInputStream(wallpaper.imagePath).use { input ->
+                    WallpaperManager.getInstance(context).setStream(
+                        input,
+                        null,
+                        true,
+                        WallpaperManager.FLAG_SYSTEM,
+                    )
+                }
                 viewModel.updateWallpaperRank(wallpaper)
             } catch (e: Exception) {
                 Log.e("WallpaperCarouselView", "Failed to set wallpaper: ${e.message}")
@@ -199,6 +202,7 @@ class WallpaperCarouselView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        viewModel.dispose()
         viewScope.cancel()
     }
 

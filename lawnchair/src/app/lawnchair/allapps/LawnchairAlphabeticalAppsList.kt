@@ -27,6 +27,7 @@ import com.android.launcher3.model.data.AppInfo
 import com.android.launcher3.model.data.FolderInfo
 import com.android.launcher3.model.data.ItemInfo
 import com.android.launcher3.util.ComponentKey
+import com.android.launcher3.util.SafeCloseable
 import com.android.launcher3.views.ActivityContext
 import com.patrykmichalik.opto.core.onEach
 import java.util.function.Predicate
@@ -69,6 +70,7 @@ class LawnchairAlphabeticalAppsList<T>(
     private var collapsedCategories: Set<String> = setOf()
     private var pendingCollapsedCategoriesWrite: Set<String>? = null
     private val filteredList = mutableListOf<AppInfo>()
+    private val preferenceSubscriptions = mutableListOf<SafeCloseable>()
     var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
 
     fun toggleCategoryCollapsed(categoryId: String) {
@@ -124,10 +126,10 @@ class LawnchairAlphabeticalAppsList<T>(
             Log.w(TAG, "Failed to initialize collapsedCategories", t)
         }
         try {
-            prefs.drawerRecentApps.subscribeChanges {
+            preferenceSubscriptions += prefs.drawerRecentApps.subscribeChanges {
                 onAppsUpdated()
             }
-            prefs.drawerRecentAppsRows.subscribeChanges {
+            preferenceSubscriptions += prefs.drawerRecentAppsRows.subscribeChanges {
                 onAppsUpdated()
             }
         } catch (t: Throwable) {
@@ -145,6 +147,8 @@ class LawnchairAlphabeticalAppsList<T>(
 
     override fun onDestroy(owner: LifecycleOwner) {
         context.launcher.deviceProfile.inv.removeOnChangeListener(this)
+        preferenceSubscriptions.forEach(SafeCloseable::close)
+        preferenceSubscriptions.clear()
     }
 
     private fun observeFolders() {

@@ -4,8 +4,8 @@ import LawnchairLockedStateController
 import android.app.ActivityManager
 import android.app.ActivityTaskManager
 import android.content.Context
-import android.os.Process
 import android.os.UserHandle
+import android.util.Log
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.launcher
 import com.android.launcher3.BuildConfig
@@ -20,18 +20,17 @@ object RecentHelper {
             val launcher = context.launcher
             val recentsView = launcher.getOverviewPanel<RecentsView<LawnchairLauncher, *>>()
             val taskViewCount = recentsView.getTaskViewCount()
-            val currentUserId = Process.myUid()
-            for (i in 0..taskViewCount) {
-                try {
-                    val rawTasks = ActivityTaskManager.getInstance()
-                        .getRecentTasks(i, ActivityManager.RECENT_IGNORE_UNAVAILABLE, currentUserId)
-                    for (recentTaskInfo in rawTasks) {
+            val currentUserId = UserHandle.myUserId()
+            try {
+                val rawTasks = ActivityTaskManager.getInstance()
+                    .getRecentTasks(taskViewCount, ActivityManager.RECENT_IGNORE_UNAVAILABLE, currentUserId)
+                for (recentTaskInfo in rawTasks) {
                         var packageName = recentTaskInfo.baseIntent.component?.packageName
                         val taskKey = Task.TaskKey(recentTaskInfo)
                         val taskId = taskKey.id
                         packageName = packageName?.replace("unknown", "")
                         if (!packageName.isNullOrEmpty()) {
-                            packageName += "#" + UserHandle.getUserHandleForUid(taskId)
+                            packageName += "#${taskKey.userId}"
                             val taskLockState = taskKey.baseIntent.component?.let {
                                 TaskUtilLockState.getTaskLockState(
                                     context,
@@ -41,18 +40,17 @@ object RecentHelper {
                             }
                             if (!isAppLocked(packageName, context) &&
                                 !packageName.contains(BuildConfig.APPLICATION_ID) &&
-                                !taskLockState!!
+                                taskLockState != true
                             ) {
                                 ActivityManagerWrapper.getInstance().removeTask(taskId)
                             }
                         }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+            } catch (e: Exception) {
+                Log.e("RecentHelper", "Failed to clear recent tasks safely", e)
             }
         } catch (exception: Exception) {
-            ActivityManagerWrapper.getInstance().removeAllRecentTasks()
+            Log.e("RecentHelper", "Unable to access the recents view", exception)
         }
     }
 

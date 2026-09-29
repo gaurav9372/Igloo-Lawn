@@ -2,22 +2,30 @@
 
 import android.app.WallpaperManager
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.util.Log
 import androidx.core.graphics.drawable.toBitmap
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.Wallpaper
-import app.lawnchair.util.bitmapToByteArray
 import com.android.launcher3.dagger.ApplicationContext
 import com.android.launcher3.dagger.LauncherAppComponent
 import com.android.launcher3.dagger.LauncherAppSingleton
 import com.android.launcher3.util.DaggerSingletonObject
 import com.android.launcher3.util.SafeCloseable
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import javax.inject.Inject
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 @LauncherAppSingleton
 class WallpaperService @Inject constructor(
@@ -25,87 +33,94 @@ class WallpaperService @Inject constructor(
 ) : SafeCloseable {
 
     val dao = AppDatabase.Companion.INSTANCE.get(context).wallpaperDao()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val saveMutex = Mutex()
 
-    suspend fun saveWallpaper(wallpaperManager: WallpaperManager) {
-        try {
-            val wallpaperDrawable = wallpaperManager.drawable
-            val currentBitmap = (wallpaperDrawable as BitmapDrawable).toBitmap()
+    @Volatile
+    private var hasWallpaperHistory = false
 
-            val byteArray = bitmapToByteArray(currentBitmap)
-
-            saveWallpaper(byteArray)
-        } catch (e: Exception) {
-            Log.e("WallpaperChange", "Error detecting wallpaper change: ${e.message}")
+    init {
+        scope.launch {
+            hasWallpaperHistory = dao.getTopWallpapers().isNotEmpty()
         }
     }
 
-    private fun calculateChecksum(imageData: ByteArray): String {
-        return MessageDigest.getInstance("MD5")
-            .digest(imageData)
-            .joinToString("") { "%02x".format(it) }
+    suspend fun saveWallpaper(wallpaperManager: WallpaperManager) = withContext(Dispatchers.IO) {
+        saveMutex.withLock {
+            try {
+                val wallpaperDrawable = wallpaperManager.drawable ?: return@withLock
+                val sourceBitmap = (wallpaperDrawable as? BitmapDrawable)?.bitmap
+                    ?: wallpaperDrawable.toBitmap()
+                val storedBitmap = sourceBitmap.downscaleForHistory(MAX_WALLPAPER_DIMENSION)
+                try {
+                    saveWallpaper(storedBitmap)
+                } finally {
+                    if (storedBitmap !== sourceBitmap) storedBitmap.recycle()
+                }
+            } catch (e: Exception) {
+                Log.e("WallpaperChange", "Error detecting wallpaper change", e)
+            }
+        }
     }
 
-    private suspend fun saveWallpaper(imageData: ByteArray) {
+    private fun calculateChecksum(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private suspend fun saveWallpaper(bitmap: Bitmap) {
         val timestamp = System.currentTimeMillis()
-
-        val checksum = calculateChecksum(imageData)
-
+        val pendingFile = writePendingWallpaper(bitmap)
+        val checksum = calculateChecksum(pendingFile)
         val existingWallpapers = dao.getTopWallpapers()
 
         if (existingWallpapers.any { it.checksum == checksum }) {
+            pendingFile.delete()
+            hasWallpaperHistory = existingWallpapers.isNotEmpty()
             Log.d("WallpaperService", "Wallpaper already exists with checksum: $checksum")
             return
         }
-        val imagePath = saveImageToAppStorage(imageData)
-        if (existingWallpapers.size < 4) {
-            val wallpaper = Wallpaper(
-                imagePath = imagePath,
-                rank = existingWallpapers.size,
-                timestamp = timestamp,
-                checksum = checksum,
-            )
-            dao.insert(wallpaper)
-        } else {
-            val lowestRankedWallpaper = existingWallpapers.minByOrNull { it.timestamp }
 
-            if (lowestRankedWallpaper != null) {
-                dao.deleteWallpaper(lowestRankedWallpaper.id)
-                deleteWallpaperFile(lowestRankedWallpaper.imagePath)
+        val imageFile = File(pendingFile.parentFile, "wallpaper_$checksum.jpg")
+        if (!pendingFile.renameTo(imageFile)) {
+            pendingFile.copyTo(imageFile, overwrite = true)
+            pendingFile.delete()
+        }
+
+        if (existingWallpapers.size >= MAX_WALLPAPER_HISTORY) {
+            existingWallpapers.minByOrNull { it.timestamp }?.let { oldest ->
+                dao.deleteWallpaper(oldest.id)
+                deleteWallpaperFile(oldest.imagePath)
             }
+        }
 
-            for (wallpaper in existingWallpapers) {
-                if (wallpaper.rank >= (lowestRankedWallpaper?.rank ?: 0)) {
-                    dao.updateRank(wallpaper.rank)
-                }
-            }
-
-            val wallpaper = Wallpaper(
-                imagePath = imagePath,
+        dao.insert(
+            Wallpaper(
+                imagePath = imageFile.absolutePath,
                 rank = 0,
                 timestamp = timestamp,
                 checksum = checksum,
-            )
-            dao.insert(wallpaper)
-        }
+            ),
+        )
+        hasWallpaperHistory = true
     }
 
     suspend fun updateWallpaperRank(selectedWallpaper: Wallpaper) {
-        val topWallpapers = dao.getTopWallpapers()
         val currentTime = System.currentTimeMillis()
-
         dao.updateWallpaper(selectedWallpaper.id, rank = 0, timestamp = currentTime)
-
-        for (wallpaper in topWallpapers) {
-            if (wallpaper.id != selectedWallpaper.id) {
-                dao.updateRank(wallpaper.rank)
-            }
-        }
     }
 
-    fun getTopWallpapers(): List<Wallpaper> = runBlocking {
-        val wallpapers = dao.getTopWallpapers()
-        wallpapers.ifEmpty { emptyList() }
-    }
+    suspend fun getTopWallpapers(): List<Wallpaper> = dao.getTopWallpapers()
+
+    fun hasWallpapersCached(): Boolean = hasWallpaperHistory
 
     private fun deleteWallpaperFile(imagePath: String) {
         val file = File(imagePath)
@@ -114,29 +129,40 @@ class WallpaperService @Inject constructor(
         }
     }
 
-    private fun saveImageToAppStorage(imageData: ByteArray): String {
+    private fun writePendingWallpaper(bitmap: Bitmap): File {
         val storageDir = File(context.filesDir, "wallpapers")
-        if (!storageDir.exists()) {
-            storageDir.mkdirs()
-        }
-
-        val imageHash = imageData.hashCode().toString()
-        val imageFile = File(storageDir, "wallpaper_$imageHash.jpg")
-
-        if (!imageFile.exists()) {
-            FileOutputStream(imageFile).use { fos ->
-                fos.write(imageData)
+        check(storageDir.exists() || storageDir.mkdirs()) { "Unable to create wallpaper history directory" }
+        val imageFile = File.createTempFile("wallpaper_pending_", ".jpg", storageDir)
+        FileOutputStream(imageFile).use { output ->
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, WALLPAPER_JPEG_QUALITY, output)) {
+                "Unable to encode wallpaper history image"
             }
         }
-
-        return imageFile.absolutePath
+        return imageFile
     }
 
     override fun close() {
-        TODO("Not yet implemented")
+        scope.cancel()
     }
+
     companion object {
+        private const val MAX_WALLPAPER_DIMENSION = 2160
+        private const val MAX_WALLPAPER_HISTORY = 4
+        private const val WALLPAPER_JPEG_QUALITY = 90
+
         @JvmField
         val INSTANCE = DaggerSingletonObject(LauncherAppComponent::getWallpaperService)
     }
+}
+
+private fun Bitmap.downscaleForHistory(maxDimension: Int): Bitmap {
+    val largestDimension = maxOf(width, height)
+    if (largestDimension <= maxDimension) return this
+    val scale = maxDimension.toFloat() / largestDimension
+    return Bitmap.createScaledBitmap(
+        this,
+        (width * scale).toInt().coerceAtLeast(1),
+        (height * scale).toInt().coerceAtLeast(1),
+        true,
+    )
 }

@@ -154,9 +154,17 @@ public class FolderInfo extends CollectionInfo {
         } else {
             options &= ~option;
         }
-        if (writer != null && oldOptions != options) {
+        // App drawer folders are backed by Lawnchair's separate Room database. Their IDs are
+        // therefore not Launcher workspace item IDs and may legitimately overlap an item in
+        // BgDataModel. Never send them through ModelWriter: doing so can update the wrong
+        // workspace row or trip ModelWriter's identity invariant when a drawer folder opens.
+        if (!isAppDrawerFolder() && writer != null && oldOptions != options) {
             writer.updateItemInDatabase(this);
         }
+    }
+
+    public boolean isAppDrawerFolder() {
+        return container == LauncherSettings.Favorites.CONTAINER_ALL_APPS;
     }
 
     @Override
@@ -204,10 +212,7 @@ public class FolderInfo extends CollectionInfo {
         } else {
             options &= ~FLAG_MANUAL_FOLDER_NAME;
         }
-        boolean isAppDrawerFolder = container
-                == com.android.launcher3.LauncherSettings.Favorites.CONTAINER_ALL_APPS;
-
-        if (!isAppDrawerFolder && modelWriter != null) {
+        if (!isAppDrawerFolder() && modelWriter != null) {
             try {
                 modelWriter.updateItemInDatabase(this);
             } catch (Exception e) {
@@ -215,7 +220,7 @@ public class FolderInfo extends CollectionInfo {
             }
         }
 
-        if (this.id > 0 && this.title != null) {
+        if (isAppDrawerFolder() && this.id > 0 && this.title != null) {
             final int folderId = this.id;
             final String folderTitle = this.title.toString();
             final android.content.Context context = modelWriter != null ? modelWriter.getContext() : null;

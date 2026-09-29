@@ -70,7 +70,7 @@ public class LauncherDelegate {
                 int itemCount = folder.getItemCount();
                 FolderInfo info = folder.mInfo;
                 if (itemCount <= 1) {
-                    if (info.container < 0 || info.container == ItemInfo.NO_ID) {
+                    if (info.isAppDrawerFolder()) {
                         app.lawnchair.data.folder.service.FolderService folderService =
                                 app.lawnchair.data.folder.service.FolderService.INSTANCE.get(mLauncher);
                         com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
@@ -94,16 +94,6 @@ public class LauncherDelegate {
                     } catch (Exception ignored) { }
 
                     if (cellLayout == null) {
-                        app.lawnchair.data.folder.service.FolderService folderService =
-                                app.lawnchair.data.folder.service.FolderService.INSTANCE.get(mLauncher);
-                        com.android.launcher3.util.Executors.MODEL_EXECUTOR.post(() -> {
-                            try {
-                                kotlinx.coroutines.BuildersKt.runBlocking(
-                                        kotlinx.coroutines.Dispatchers.getIO(),
-                                        (scope, continuation) -> folderService.deleteFolderInfo(info.id, continuation)
-                                );
-                            } catch (Exception ignored) { }
-                        });
                         if (folder.isOpen()) {
                             folder.close(true);
                         }

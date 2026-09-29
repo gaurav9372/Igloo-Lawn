@@ -1015,7 +1015,6 @@ public class Launcher extends StatefulActivity<LauncherState>
     @Override
     protected void onStop() {
         super.onStop();
-        app.lawnchair.report.LawnchairReportRepository.INSTANCE.onLauncherStopped(this);
         if (mDeferOverlayCallbacks) {
             checkIfOverlayStillDeferred();
         } else {
@@ -2185,6 +2184,13 @@ public class Launcher extends StatefulActivity<LauncherState>
 
             // This clears all widget bitmaps from the widget tray
             // TODO(hyunyoungs)
+        }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+                || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            // Keep the HOME process lean when Android is actively reclaiming memory. Bound views
+            // retain the icons they are displaying; cache misses after returning home are loaded
+            // again from the on-disk icon database.
+            LauncherAppState.getInstance(this).getIconCache().clearMemoryCache();
         }
     }
 

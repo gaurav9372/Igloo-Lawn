@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.graphics.drawable.toBitmap
+import androidx.room.withTransaction
 import app.lawnchair.LawnchairProto.BackupInfo
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.category.CategoryInfoEntity
@@ -28,6 +29,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.zip.ZipEntry
@@ -69,61 +71,183 @@ class LawnchairBackup(
         wallpaper = tmpWallpaper?.scaleDownToDisplaySize(context)
     }
 
-    suspend fun restore(selectedContents: Int) {
-        val handlers = mutableMapOf<String, suspend (InputStream) -> Unit>()
+    suspend fun restore(selectedContents: Int) = withContext(Dispatchers.IO) {
         val contents = selectedContents and info.contents
-        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-            handlers.putAll(
-                getFiles(context, forRestore = true).mapValues { entry ->
-                    {
-                        val file = entry.value
-                        file.parentFile?.mkdirs()
-                        it.copyTo(file.outputStream())
+        val stagedRestore = stageRestoreArchive(contents)
+        val replacements = mutableListOf<FileReplacement>()
+        val previousGridState = DeviceGridState(context)
+        try {
+            val categoriesJson = stagedRestore.files[CATEGORIES_FILE_NAME]?.readText()
+            val foldersJson = stagedRestore.files[FOLDERS_FILE_NAME]?.readText()
+
+            // Parse every structured payload before replacing or deleting any live data.
+            categoriesJson?.let(::parseCategoriesJson)
+            foldersJson?.let(::parseFoldersJson)
+            stagedRestore.files[WALLPAPER_FILE_NAME]?.let(::validateWallpaperFile)
+
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                AppDatabase.INSTANCE.get(context).checkpoint()
+                AppDatabase.reset(context)
+                installStagedLayoutFiles(stagedRestore, replacements)
+            }
+
+            if (contents.hasFlag(INCLUDE_CATEGORIES) && categoriesJson != null) {
+                restoreCategoriesFromJson(context, categoriesJson)
+            }
+            if (
+                (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) || contents.hasFlag(INCLUDE_CATEGORIES)) &&
+                foldersJson != null
+            ) {
+                restoreFoldersFromJson(context, foldersJson)
+            }
+
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                DeviceGridState(info.gridState).writeToPrefs(context, true)
+            }
+            val dbController = ModelDbController(context)
+            RestoreDbTask.performRestore(context, dbController)
+            replacements.forEach { it.backup?.delete() }
+            if (contents.hasFlag(INCLUDE_WALLPAPER)) {
+                runCatching {
+                    stagedRestore.files[WALLPAPER_FILE_NAME]?.inputStream()?.use { input ->
+                        WallpaperManager.getInstance(context).setStream(input)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            AppDatabase.reset(context)
+            rollbackFileReplacements(replacements)
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                previousGridState.writeToPrefs(context, true)
+            }
+            throw t
+        } finally {
+            stagedRestore.directory.deleteRecursively()
+        }
+    }
+
+    private data class StagedRestore(val directory: File, val files: Map<String, File>)
+
+    private data class FileReplacement(val target: File, val backup: File?)
+
+    private suspend fun stageRestoreArchive(contents: Int): StagedRestore = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "restore-${System.nanoTime()}")
+        check(directory.mkdirs()) { "Unable to create restore staging directory" }
+        val selectedNames = buildSet {
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                addAll(getFiles(context, forRestore = false).keys)
+            }
+            if (contents.hasFlag(INCLUDE_WALLPAPER)) add(WALLPAPER_FILE_NAME)
+            if (contents.hasFlag(INCLUDE_CATEGORIES)) add(CATEGORIES_FILE_NAME)
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) || contents.hasFlag(INCLUDE_CATEGORIES)) {
+                add(FOLDERS_FILE_NAME)
+            }
+        }
+        val stagedFiles = mutableMapOf<String, File>()
+        try {
+            readZip(
+                selectedNames.associateWith { name ->
+                    { input: InputStream ->
+                        val target = File(directory, name)
+                        target.outputStream().use { output ->
+                            copyWithLimit(input, output, maxRestoreEntrySize(name))
+                        }
+                        stagedFiles[name] = target
                     }
                 },
             )
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) && LAUNCHER_DB_FILE_NAME !in stagedFiles) {
+                throw IOException("Backup does not contain a launcher database")
+            }
+            if (contents.hasFlag(INCLUDE_CATEGORIES) && CATEGORIES_FILE_NAME !in stagedFiles) {
+                throw IOException("Backup does not contain categories")
+            }
+            StagedRestore(directory, stagedFiles)
+        } catch (t: Throwable) {
+            directory.deleteRecursively()
+            throw t
         }
-        if (contents.hasFlag(INCLUDE_WALLPAPER)) {
-            handlers[WALLPAPER_FILE_NAME] = {
-                try {
-                    val wallpaperManager = WallpaperManager.getInstance(context)
-                    wallpaperManager.setBitmap(BitmapFactory.decodeStream(it))
-                } catch (e: Throwable) {
-                    // Ignore wallpaper permission/bitmap errors on restore
-                }
+    }
+
+    private fun copyWithLimit(input: InputStream, output: java.io.OutputStream, limit: Long) {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0L
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > limit) throw IOException("Backup entry exceeds the allowed size")
+            output.write(buffer, 0, count)
+        }
+    }
+
+    private fun maxRestoreEntrySize(name: String): Long = when (name) {
+        LAUNCHER_DB_FILE_NAME, PREFS_DB_FILE_NAME -> 128L * 1024 * 1024
+        WALLPAPER_FILE_NAME -> 64L * 1024 * 1024
+        CATEGORIES_FILE_NAME, FOLDERS_FILE_NAME -> 16L * 1024 * 1024
+        else -> 16L * 1024 * 1024
+    }
+
+    private fun installStagedLayoutFiles(
+        stagedRestore: StagedRestore,
+        replacements: MutableList<FileReplacement>,
+    ) {
+        val restoreTargets = getFiles(context, forRestore = true)
+        stagedRestore.files.forEach { (name, stagedFile) ->
+            val target = restoreTargets[name] ?: return@forEach
+            target.parentFile?.mkdirs()
+            replaceFile(stagedFile, target, stagedRestore.directory, replacements)
+            if (name == LAUNCHER_DB_FILE_NAME || name == PREFS_DB_FILE_NAME) {
+                archiveFile(File(target.path + "-wal"), stagedRestore.directory, replacements)
+                archiveFile(File(target.path + "-shm"), stagedRestore.directory, replacements)
             }
         }
-        if (contents.hasFlag(INCLUDE_CATEGORIES)) {
-            handlers[CATEGORIES_FILE_NAME] = { inputStream ->
-                val jsonStr = inputStream.bufferedReader().readText()
-                restoreCategoriesFromJson(context, jsonStr)
+    }
+
+    private fun replaceFile(
+        source: File,
+        target: File,
+        stagingDirectory: File,
+        replacements: MutableList<FileReplacement>,
+    ) {
+        val pending = File(target.parentFile, "${target.name}.restore-pending")
+        pending.delete()
+        source.copyTo(pending, overwrite = true)
+        archiveFile(target, stagingDirectory, replacements)
+        if (!pending.renameTo(target)) {
+            pending.delete()
+            throw IOException("Unable to install ${target.name}")
+        }
+    }
+
+    private fun archiveFile(
+        target: File,
+        stagingDirectory: File,
+        replacements: MutableList<FileReplacement>,
+    ) {
+        val backup = if (target.exists()) {
+            File(stagingDirectory, "rollback-${replacements.size}-${target.name}").also { rollback ->
+                if (!target.renameTo(rollback)) throw IOException("Unable to stage ${target.name} for rollback")
             }
+        } else {
+            null
         }
-        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) || contents.hasFlag(INCLUDE_CATEGORIES)) {
-            handlers[FOLDERS_FILE_NAME] = { inputStream ->
-                val jsonStr = inputStream.bufferedReader().readText()
-                restoreFoldersFromJson(context, jsonStr)
-            }
+        replacements += FileReplacement(target, backup)
+    }
+
+    private fun rollbackFileReplacements(replacements: List<FileReplacement>) {
+        replacements.asReversed().forEach { replacement ->
+            replacement.target.delete()
+            replacement.backup?.renameTo(replacement.target)
         }
+    }
 
-        // Clean up SQLite WAL & SHM files before file copy to prevent WAL journal corruption
-        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-            context.getDatabasePath("launcher.db").delete()
-            context.getDatabasePath("launcher.db-wal").delete()
-            context.getDatabasePath("launcher.db-shm").delete()
-            context.getDatabasePath("restored.db").delete()
-            context.getDatabasePath("restored.db-wal").delete()
-            context.getDatabasePath("restored.db-shm").delete()
+    private fun validateWallpaperFile(file: File) {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, options)
+        if (options.outWidth <= 0 || options.outHeight <= 0) {
+            throw IOException("Backup contains an invalid wallpaper")
         }
-
-        // Safely reset Room database so subsequent category/folder restoration re-opens cleanly
-        AppDatabase.reset(context)
-
-        DeviceGridState(info.gridState).writeToPrefs(context, true)
-        readZip(handlers)
-
-        val dbController = ModelDbController(context)
-        RestoreDbTask.performRestore(context, dbController)
     }
 
     private suspend fun readZip(handlers: Map<String, suspend (InputStream) -> Unit>) {
@@ -220,54 +344,71 @@ class LawnchairBackup(
         /**
          * Restores categories and categoryOrder preference from JSON string.
          */
+        private data class ParsedCategory(
+            val rank: Int,
+            val title: String,
+            val hide: Boolean,
+            val apps: List<String>,
+        )
+
+        private data class ParsedCategories(
+            val categoryOrder: String?,
+            val categories: List<ParsedCategory>,
+        )
+
+        private fun parseCategoriesJson(json: String): ParsedCategories {
+            val trimmed = json.trim()
+            val rootObj = if (trimmed.startsWith("{")) JSONObject(trimmed) else null
+            if (rootObj != null && !rootObj.has("categories")) {
+                throw IOException("Backup categories payload is incomplete")
+            }
+            val arr = rootObj?.optJSONArray("categories") ?: JSONArray(trimmed.takeUnless { rootObj != null } ?: "[]")
+            val categories = (0 until arr.length()).map { index ->
+                val obj = arr.getJSONObject(index)
+                val appsArray = obj.optJSONArray("apps") ?: JSONArray()
+                ParsedCategory(
+                    rank = obj.optInt("rank", index),
+                    title = obj.optString("title", "Category ${index + 1}"),
+                    hide = obj.optBoolean("hide", false),
+                    apps = (0 until appsArray.length()).map(appsArray::getString),
+                )
+            }
+            return ParsedCategories(
+                categoryOrder = rootObj?.optString("categoryOrder", "")?.takeIf(String::isNotBlank),
+                categories = categories,
+            )
+        }
+
         suspend fun restoreCategoriesFromJson(context: Context, json: String) = withContext(Dispatchers.IO) {
+            val parsed = parseCategoriesJson(json)
             val db = AppDatabase.INSTANCE.get(context)
             val dao = db.categoryDao()
 
-            val existingCategories = dao.getAllCategoriesWithItems().first()
-            for (existing in existingCategories) {
-                dao.deleteCategory(existing.category.id)
-            }
-
-            val trimmed = json.trim()
-            val arr: JSONArray
-            if (trimmed.startsWith("{")) {
-                val rootObj = JSONObject(trimmed)
-                val categoryOrderStr = rootObj.optString("categoryOrder", "")
-                if (categoryOrderStr.isNotBlank()) {
-                    PreferenceManager2.getInstance(context).categoryOrder.set(categoryOrderStr)
+            db.withTransaction {
+                val existingCategories = dao.getAllCategoriesWithItems().first()
+                for (existing in existingCategories) {
+                    dao.deleteCategory(existing.category.id)
                 }
-                arr = rootObj.optJSONArray("categories") ?: JSONArray()
-            } else {
-                arr = JSONArray(trimmed)
-            }
 
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val rank = obj.optInt("rank", i)
-                val title = obj.optString("title", "Category ${i + 1}")
-                val hide = obj.optBoolean("hide", false)
-                val appsArr = obj.optJSONArray("apps") ?: JSONArray()
-
-                val newCategoryId = dao.insertCategory(
-                    CategoryInfoEntity(
-                        title = title,
-                        hide = hide,
-                        rank = rank,
-                    ),
-                ).toInt()
-
-                val items = (0 until appsArr.length()).map { j ->
-                    CategoryItemEntity(
-                        categoryId = newCategoryId,
-                        rank = j,
-                        componentKey = appsArr.getString(j),
-                    )
-                }
-                if (items.isNotEmpty()) {
-                    dao.insertCategoryItems(items)
+                parsed.categories.forEach { category ->
+                    val newCategoryId = dao.insertCategory(
+                        CategoryInfoEntity(
+                            title = category.title,
+                            hide = category.hide,
+                            rank = category.rank,
+                        ),
+                    ).toInt()
+                    val items = category.apps.mapIndexed { rank, componentKey ->
+                        CategoryItemEntity(
+                            categoryId = newCategoryId,
+                            rank = rank,
+                            componentKey = componentKey,
+                        )
+                    }
+                    if (items.isNotEmpty()) dao.insertCategoryItems(items)
                 }
             }
+            parsed.categoryOrder?.let { PreferenceManager2.getInstance(context).categoryOrder.set(it) }
         }
 
         /**
@@ -302,54 +443,71 @@ class LawnchairBackup(
         /**
          * Restores App Drawer folders and folderOrder preference from JSON string.
          */
+        private data class ParsedFolder(
+            val rank: Int,
+            val title: String,
+            val hide: Boolean,
+            val apps: List<String>,
+        )
+
+        private data class ParsedFolders(
+            val folderOrder: String?,
+            val folders: List<ParsedFolder>,
+        )
+
+        private fun parseFoldersJson(json: String): ParsedFolders {
+            val trimmed = json.trim()
+            val rootObj = if (trimmed.startsWith("{")) JSONObject(trimmed) else null
+            if (rootObj != null && !rootObj.has("folders")) {
+                throw IOException("Backup folders payload is incomplete")
+            }
+            val arr = rootObj?.optJSONArray("folders") ?: JSONArray(trimmed.takeUnless { rootObj != null } ?: "[]")
+            val folders = (0 until arr.length()).map { index ->
+                val obj = arr.getJSONObject(index)
+                val appsArray = obj.optJSONArray("apps") ?: JSONArray()
+                ParsedFolder(
+                    rank = obj.optInt("rank", index),
+                    title = obj.optString("title", "Folder ${index + 1}"),
+                    hide = obj.optBoolean("hide", false),
+                    apps = (0 until appsArray.length()).map(appsArray::getString),
+                )
+            }
+            return ParsedFolders(
+                folderOrder = rootObj?.optString("folderOrder", "")?.takeIf(String::isNotBlank),
+                folders = folders,
+            )
+        }
+
         suspend fun restoreFoldersFromJson(context: Context, json: String) = withContext(Dispatchers.IO) {
+            val parsed = parseFoldersJson(json)
             val db = AppDatabase.INSTANCE.get(context)
             val dao = db.folderDao()
 
-            val existingFolders = dao.getAllFoldersWithItems().first()
-            for (existing in existingFolders) {
-                dao.deleteFolder(existing.folder.id)
-            }
-
-            val trimmed = json.trim()
-            val arr: JSONArray
-            if (trimmed.startsWith("{")) {
-                val rootObj = JSONObject(trimmed)
-                val folderOrderStr = rootObj.optString("folderOrder", "")
-                if (folderOrderStr.isNotBlank()) {
-                    PreferenceManager.getInstance(context).drawerListOrder.set(folderOrderStr)
+            db.withTransaction {
+                val existingFolders = dao.getAllFoldersWithItems().first()
+                for (existing in existingFolders) {
+                    dao.deleteFolder(existing.folder.id)
                 }
-                arr = rootObj.optJSONArray("folders") ?: JSONArray()
-            } else {
-                arr = JSONArray(trimmed)
-            }
 
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val rank = obj.optInt("rank", i)
-                val title = obj.optString("title", "Folder ${i + 1}")
-                val hide = obj.optBoolean("hide", false)
-                val appsArr = obj.optJSONArray("apps") ?: JSONArray()
-
-                val newFolderId = dao.insertFolder(
-                    FolderInfoEntity(
-                        title = title,
-                        hide = hide,
-                        rank = rank,
-                    ),
-                ).toInt()
-
-                val items = (0 until appsArr.length()).map { j ->
-                    FolderItemEntity(
-                        folderId = newFolderId,
-                        rank = j,
-                        componentKey = appsArr.getString(j),
-                    )
-                }
-                if (items.isNotEmpty()) {
-                    dao.insertFolderItems(items)
+                parsed.folders.forEach { folder ->
+                    val newFolderId = dao.insertFolder(
+                        FolderInfoEntity(
+                            title = folder.title,
+                            hide = folder.hide,
+                            rank = folder.rank,
+                        ),
+                    ).toInt()
+                    val items = folder.apps.mapIndexed { rank, componentKey ->
+                        FolderItemEntity(
+                            folderId = newFolderId,
+                            rank = rank,
+                            componentKey = componentKey,
+                        )
+                    }
+                    if (items.isNotEmpty()) dao.insertFolderItems(items)
                 }
             }
+            parsed.folderOrder?.let { PreferenceManager.getInstance(context).drawerListOrder.set(it) }
         }
 
         @SuppressLint("MissingPermission")
@@ -398,10 +556,12 @@ class LawnchairBackup(
                             screenshotBitmap.compress(Bitmap.CompressFormat.PNG, 85, out)
                         }
 
-                        getFiles(context, forRestore = false).entries.forEach {
-                            if (!it.value.exists()) return@forEach
-                            out.putNextEntry(ZipEntry(it.key))
-                            it.value.inputStream().copyTo(out)
+                        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                            getFiles(context, forRestore = false).entries.forEach {
+                                if (!it.value.exists()) return@forEach
+                                out.putNextEntry(ZipEntry(it.key))
+                                it.value.inputStream().copyTo(out)
+                            }
                         }
 
                         if (categoriesJson != null) {
