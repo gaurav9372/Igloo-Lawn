@@ -35,10 +35,13 @@ import com.android.launcher3.LauncherAppState
 import com.android.launcher3.R
 import com.android.launcher3.allapps.BaseAllAppsAdapter
 import com.android.launcher3.search.SearchCallback
+import com.android.launcher3.util.Executors.MAIN_EXECUTOR
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -63,29 +66,43 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
     )
 
     override fun doSearch(query: String, callback: SearchCallback<BaseAllAppsAdapter.AdapterItem>) {
-        appState.model.enqueueModelUpdateTask { _, _, apps ->
-            val appResults = appSearchProvider.search(context, query, apps)
-            val shortcutResults = shortcutSearchProvider.search(context, appResults)
+        currentJob?.cancel()
+        currentJob = coroutineScope.launch {
+            appState.model.enqueueModelUpdateTask { _, _, apps ->
+                val appResults = appSearchProvider.search(context, query, apps)
+                val shortcutResults = shortcutSearchProvider.search(context, appResults)
 
-            currentJob?.cancel()
-            currentJob = coroutineScope.launch {
-                val nonAppProvidersFlow = combine(
-                    searchProviders.map { it.search(context, query) },
-                ) { resultsArray ->
-                    resultsArray.toList().flatten()
+                // 1. Immediately emit in-memory app and shortcut results with zero latency
+                val instantResults = appResults + shortcutResults + generateActionResults(query)
+                val instantTargets = translateToSearchTargets(instantResults)
+                setFirstItemQuickLaunch(instantTargets)
+                val instantAdapterItems = transformSearchResults(instantTargets)
+                MAIN_EXECUTOR.execute {
+                    callback.onSearchResult(query, ArrayList(instantAdapterItems))
                 }
 
-                nonAppProvidersFlow.collect { nonAppResults ->
-                    val calcResult = CalculatorSearchProvider.search(context, query)
-                        .firstOrNull()
+                // 2. Debounce heavy content resolver and network providers
+                currentJob?.cancel()
+                currentJob = coroutineScope.launch {
+                    delay(150)
+                    val nonAppProvidersFlow = combine(
+                        searchProviders.map { it.search(context, query) },
+                    ) { resultsArray ->
+                        resultsArray.toList().flatten()
+                    }
 
-                    val allResults = appResults + shortcutResults + (calcResult ?: emptyList()) + nonAppResults + generateActionResults(query)
+                    nonAppProvidersFlow.collect { nonAppResults ->
+                        val calcResult = CalculatorSearchProvider.search(context, query)
+                            .firstOrNull()
 
-                    val searchTargets = translateToSearchTargets(allResults)
-                    setFirstItemQuickLaunch(searchTargets)
-                    val adapterItems = transformSearchResults(searchTargets)
-                    withContext(Dispatchers.Main) {
-                        callback.onSearchResult(query, ArrayList(adapterItems))
+                        val allResults = appResults + shortcutResults + (calcResult ?: emptyList()) + nonAppResults + generateActionResults(query)
+
+                        val searchTargets = translateToSearchTargets(allResults)
+                        setFirstItemQuickLaunch(searchTargets)
+                        val adapterItems = transformSearchResults(searchTargets)
+                        withContext(Dispatchers.Main) {
+                            callback.onSearchResult(query, ArrayList(adapterItems))
+                        }
                     }
                 }
             }
@@ -138,7 +155,16 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
     }
 
     override fun cancel(interruptActiveRequests: Boolean) {
+        if (interruptActiveRequests) {
+            currentJob?.cancel()
+            currentJob = null
+        }
+    }
+
+    override fun destroy() {
         currentJob?.cancel()
+        currentJob = null
+        coroutineScope.cancel()
     }
 
     private fun generateActionResults(query: String): List<SearchResult.Action> {

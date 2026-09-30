@@ -115,7 +115,7 @@ public class AllAppsStore<T extends Context & ActivityContext> {
         }
     }
 
-    AllAppsRecyclerViewPool getRecyclerViewPool() {
+    public AllAppsRecyclerViewPool getRecyclerViewPool() {
         return mAllAppsRecyclerViewPool;
     }
 

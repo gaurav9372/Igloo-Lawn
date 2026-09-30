@@ -18,11 +18,14 @@ package app.lawnchair
 
 import android.animation.AnimatorSet
 import android.app.ActivityOptions
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import app.lawnchair.font.FontCache
+import app.lawnchair.HeadlessWidgetsManager
 import android.util.Pair
 import android.view.Display
 import android.view.Gravity
@@ -229,6 +232,7 @@ class LawnchairLauncher : QuickstepLauncher() {
                 }
                 if (finalState == LauncherState.NORMAL) {
                     mAppsView?.reset(false)
+                    mAppsView?.appsStore?.recyclerViewPool?.clear()
                 }
             }
         })
@@ -320,6 +324,30 @@ class LawnchairLauncher : QuickstepLauncher() {
             } catch (t: Throwable) {
                 android.util.Log.w("LawnchairLauncher", "Background DB checkpoint failed", t)
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        try {
+            HeadlessWidgetsManager.INSTANCE.get(this).startListening()
+        } catch (_: Exception) {}
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            HeadlessWidgetsManager.INSTANCE.get(this).stopListening()
+        } catch (_: Exception) {}
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            try {
+                FontCache.INSTANCE.get(this).onTrimMemory(level)
+                mAppsView?.appsStore?.recyclerViewPool?.clear()
+            } catch (_: Exception) {}
         }
     }
 

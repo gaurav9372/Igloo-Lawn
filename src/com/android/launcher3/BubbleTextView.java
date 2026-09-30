@@ -149,6 +149,13 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
     private static final int BOLD_TEXT_ADJUSTMENT = FONT_WEIGHT_BOLD - FONT_WEIGHT_NORMAL;
 
     private static final int[] STATE_PRESSED = new int[]{android.R.attr.state_pressed};
+    private static final Rect sTempIconBounds = new Rect();
+    private static final Paint sMultiSelectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static final Path sMultiSelectPath = new Path();
+    private static final Rect sTempDrawingRect = new Rect();
+    private static final RectF sTempAppTitleBounds = new RectF();
+    private static final android.util.LruCache<String, CharSequence> sMultiLineTitleCache =
+            new android.util.LruCache<>(300);
 
     private float mScaleForReorderBounce = 1f;
 
@@ -942,43 +949,43 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
                 String key = componentKey.toString();
                 boolean isSelected = app.lawnchair.allapps.MultiSelectManager.INSTANCE.isSelected(key);
 
-                Rect iconBounds = new Rect();
-                getIconBounds(iconBounds);
+                getIconBounds(sTempIconBounds);
                 final int scrollX = getScrollX();
                 final int scrollY = getScrollY();
                 canvas.translate(scrollX, scrollY);
 
                 float density = getResources().getDisplayMetrics().density;
                 float radius = 9.5f * density;
-                float cx = iconBounds.right - 2 * density;
-                float cy = iconBounds.top + radius + 1 * density;
+                float cx = sTempIconBounds.right - 2 * density;
+                float cy = sTempIconBounds.top + radius + 1 * density;
 
-                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                sMultiSelectPaint.reset();
+                sMultiSelectPaint.setAntiAlias(true);
                 if (isSelected) {
-                    paint.setColor(com.android.launcher3.util.Themes.getAttrColor(getContext(), android.R.attr.colorAccent));
-                    paint.setStyle(Paint.Style.FILL);
-                    canvas.drawCircle(cx, cy, radius, paint);
+                    sMultiSelectPaint.setColor(com.android.launcher3.util.Themes.getAttrColor(getContext(), android.R.attr.colorAccent));
+                    sMultiSelectPaint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(cx, cy, radius, sMultiSelectPaint);
 
-                    paint.setColor(android.graphics.Color.WHITE);
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(2.2f * density);
-                    paint.setStrokeCap(Paint.Cap.ROUND);
-                    paint.setStrokeJoin(Paint.Join.ROUND);
+                    sMultiSelectPaint.setColor(android.graphics.Color.WHITE);
+                    sMultiSelectPaint.setStyle(Paint.Style.STROKE);
+                    sMultiSelectPaint.setStrokeWidth(2.2f * density);
+                    sMultiSelectPaint.setStrokeCap(Paint.Cap.ROUND);
+                    sMultiSelectPaint.setStrokeJoin(Paint.Join.ROUND);
 
-                    Path checkPath = new Path();
-                    checkPath.moveTo(cx - radius * 0.4f, cy);
-                    checkPath.lineTo(cx - radius * 0.1f, cy + radius * 0.35f);
-                    checkPath.lineTo(cx + radius * 0.45f, cy - radius * 0.3f);
-                    canvas.drawPath(checkPath, paint);
+                    sMultiSelectPath.reset();
+                    sMultiSelectPath.moveTo(cx - radius * 0.4f, cy);
+                    sMultiSelectPath.lineTo(cx - radius * 0.1f, cy + radius * 0.35f);
+                    sMultiSelectPath.lineTo(cx + radius * 0.45f, cy - radius * 0.3f);
+                    canvas.drawPath(sMultiSelectPath, sMultiSelectPaint);
                 } else {
-                    paint.setColor(0xCCFFFFFF);
-                    paint.setStyle(Paint.Style.FILL);
-                    canvas.drawCircle(cx, cy, radius, paint);
+                    sMultiSelectPaint.setColor(0xCCFFFFFF);
+                    sMultiSelectPaint.setStyle(Paint.Style.FILL);
+                    canvas.drawCircle(cx, cy, radius, sMultiSelectPaint);
 
-                    paint.setColor(0x88000000);
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(1.5f * density);
-                    canvas.drawCircle(cx, cy, radius, paint);
+                    sMultiSelectPaint.setColor(0x88000000);
+                    sMultiSelectPaint.setStyle(Paint.Style.STROKE);
+                    sMultiSelectPaint.setStrokeWidth(1.5f * density);
+                    canvas.drawCircle(cx, cy, radius, sMultiSelectPaint);
                 }
                 canvas.translate(-scrollX, -scrollY);
             }
@@ -1007,10 +1014,8 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
 
     /** Draws a background behind the App Title label when required. **/
     public void drawAppContrastTile(Canvas canvas) {
-        RectF appTitleBounds;
         Paint.FontMetrics fm = getPaint().getFontMetrics();
-        Rect tmpRect = new Rect();
-        getDrawingRect(tmpRect);
+        getDrawingRect(sTempDrawingRect);
         CharSequence text = getText();
 
         int mAppTitleHorizontalPadding = getResources().getDimensionPixelSize(
@@ -1020,22 +1025,22 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
 
         float titleLength = (getPaint().measureText(text, 0, text.length())
                 + (mAppTitleHorizontalPadding + mRoundRectPadding) * 2);
-        titleLength = Math.min(titleLength, tmpRect.width());
-        appTitleBounds = new RectF((tmpRect.width() - titleLength) / 2.f - getCompoundPaddingLeft(),
-                0, (tmpRect.width() + titleLength) / 2.f + getCompoundPaddingRight(),
+        titleLength = Math.min(titleLength, sTempDrawingRect.width());
+        sTempAppTitleBounds.set(
+                (sTempDrawingRect.width() - titleLength) / 2.f - getCompoundPaddingLeft(),
+                0,
+                (sTempDrawingRect.width() + titleLength) / 2.f + getCompoundPaddingRight(),
                 (int) Math.ceil(fm.bottom - fm.top));
-        appTitleBounds.inset((mAppTitleHorizontalPadding) * 2, 0);
-
+        sTempAppTitleBounds.inset((mAppTitleHorizontalPadding) * 2, 0);
 
         if (mIcon != null) {
-            Rect iconBounds = new Rect();
-            getIconBounds(iconBounds);
-            int textStart = iconBounds.bottom + getCompoundDrawablePadding();
-            appTitleBounds.offset(0, textStart);
+            getIconBounds(sTempIconBounds);
+            int textStart = sTempIconBounds.bottom + getCompoundDrawablePadding();
+            sTempAppTitleBounds.offset(0, textStart);
         }
 
-        canvas.drawRoundRect(appTitleBounds, appTitleBounds.height() / 2,
-                appTitleBounds.height() / 2,
+        canvas.drawRoundRect(sTempAppTitleBounds, sTempAppTitleBounds.height() / 2,
+                sTempAppTitleBounds.height() / 2,
                 PillColorProvider.getInstance(getContext()).getAppTitlePillPaint());
     }
 
@@ -1319,8 +1324,18 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
     public static CharSequence modifyTitleToSupportMultiLine(int limitedWidth, int limitedHeight,
             CharSequence title, TextPaint paint, IntArray breakPoints, float spacingMultiplier,
             float spacingExtra) {
+        if (title == null) {
+            return null;
+        }
+        String cacheKey = title + "_" + limitedWidth + "_" + limitedHeight + "_" + (int) paint.getTextSize();
+        CharSequence cached = sMultiLineTitleCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
         // current title is less than the width allowed so we can just skip
-        if (title == null || paint.measureText(title, 0, title.length()) <= limitedWidth) {
+        if (paint.measureText(title, 0, title.length()) <= limitedWidth) {
+            sMultiLineTitleCache.put(cacheKey, title);
             return title;
         }
         float currentWordWidth, runningWidth = 0;
@@ -1357,10 +1372,13 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
                     StaticLayout staticLayout = new StaticLayout(newString, paint, limitedWidth,
                             ALIGN_NORMAL, spacingMultiplier, spacingExtra, false);
                     if (staticLayout.getHeight() < limitedHeight) {
-                        return newString.toString();
+                        String result = newString.toString();
+                        sMultiLineTitleCache.put(cacheKey, result);
+                        return result;
                     }
                 }
                 // if the first words exceeds width, just return as the first line will ellipse
+                sMultiLineTitleCache.put(cacheKey, title);
                 return title;
             }
             if (i >= breakPoints.size()) {
@@ -1369,7 +1387,9 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
             }
             stringPtr = breakPoints.get(i) + 1;
         }
-        return newString.toString();
+        String finalResult = newString.toString();
+        sMultiLineTitleCache.put(cacheKey, finalResult);
+        return finalResult;
     }
 
     @Override

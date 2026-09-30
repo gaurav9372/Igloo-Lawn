@@ -17,10 +17,12 @@
 
 package app.lawnchair.font
 
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.AssetManager
 import android.graphics.Typeface
 import android.net.Uri
+import android.util.LruCache
 import androidx.annotation.Keep
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font as ComposeFont
@@ -50,6 +52,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.plus
 import org.json.JSONArray
@@ -62,7 +65,7 @@ class FontCache @Inject constructor(
 
     private val scope = MainScope() + CoroutineName("FontCache")
 
-    private val deferredFonts = mutableMapOf<Font, Deferred<LoadedFont?>>()
+    private val deferredFonts = LruCache<Font, Deferred<LoadedFont?>>(24)
 
     private val cacheDir = context.cacheDir.apply { mkdirs() }
     private val customFontsDir = TTFFont.getFontsDir(context)
@@ -143,17 +146,19 @@ class FontCache @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun getLoadedFont(font: Font): LoadedFont? {
-        val deferredFont = deferredFonts[font] ?: return null
+        val deferredFont = deferredFonts.get(font) ?: return null
         if (!deferredFont.isCompleted) return null
         return deferredFont.getCompleted()
     }
 
     private fun loadFontAsync(font: Font): Deferred<LoadedFont?> {
-        return deferredFonts.getOrPut(font) {
-            scope.async {
-                font.load()?.let { LoadedFont(it) }
-            }
+        val cached = deferredFonts.get(font)
+        if (cached != null) return cached
+        val deferred = scope.async {
+            font.load()?.let { LoadedFont(it) }
         }
+        deferredFonts.put(font, deferred)
+        return deferred
     }
 
     fun addCustomFont(uri: Uri) {
@@ -181,8 +186,15 @@ class FontCache @Inject constructor(
         deferredFonts.remove(TTFFont(context, file))
     }
 
+    fun onTrimMemory(level: Int) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            deferredFonts.trimToSize(6)
+        }
+    }
+
     override fun close() {
-        TODO("Not yet implemented")
+        scope.cancel()
+        deferredFonts.evictAll()
     }
 
     class Family(val displayName: String, val variants: Map<String, Font>) {

@@ -39,8 +39,30 @@ class HeadlessWidgetsManager @Inject constructor(
     private val host = HeadlessAppWidgetHost(context)
     private val widgetsMap = mutableMapOf<String, Widget>()
 
+    private var isListening = false
+
     init {
-        host.startListening()
+        startListening()
+    }
+
+    fun startListening() {
+        if (!isListening) {
+            try {
+                host.startListening()
+                isListening = true
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun stopListening() {
+        if (isListening) {
+            try {
+                host.stopListening()
+                isListening = false
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun getWidget(info: AppWidgetProviderInfo, prefKey: String): Widget {
@@ -63,7 +85,7 @@ class HeadlessWidgetsManager @Inject constructor(
 
     override fun close() {
         scope.cancel()
-        host.stopListening()
+        stopListening()
         widgetsMap.clear()
     }
 

@@ -367,16 +367,28 @@ class LawnchairIconProvider @Inject constructor(
             context.registerReceiver(this, filter, null, handler)
         }
 
+        private fun notifyClocks(context: Context) {
+            context.getSystemService<UserManager>()?.userProfiles?.forEach { user ->
+                iconPack.getClocks().forEach { componentName ->
+                    callback.onAppIconChanged(
+                        componentName.packageName,
+                        user,
+                    )
+                }
+            }
+        }
+
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                ACTION_TIMEZONE_CHANGED, ACTION_TIME_CHANGED, ACTION_TIME_TICK -> {
-                    context.getSystemService<UserManager>()?.userProfiles?.forEach { user ->
-                        iconPack.getClocks().forEach { componentName ->
-                            callback.onAppIconChanged(
-                                componentName.packageName,
-                                user,
-                            )
-                        }
+                ACTION_TIMEZONE_CHANGED, ACTION_TIME_CHANGED -> {
+                    notifyClocks(context)
+                }
+
+                ACTION_TIME_TICK -> {
+                    // Only dispatch per-minute icon invalidations when launcher is currently visible/resumed
+                    val launcher = app.lawnchair.LawnchairApp.launcher
+                    if (launcher != null && launcher.hasBeenResumed()) {
+                        notifyClocks(context)
                     }
                 }
 

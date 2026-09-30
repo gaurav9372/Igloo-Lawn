@@ -2190,14 +2190,9 @@ public class Launcher extends StatefulActivity<LauncherState>
             // 3MB of memory for caching which isn't necessary.
             SQLiteDatabase.releaseMemory();
 
-            // This clears all widget bitmaps from the widget tray
-            // TODO(hyunyoungs)
-        }
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
-                || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
-            // Keep the HOME process lean when Android is actively reclaiming memory. Bound views
-            // retain the icons they are displaying; cache misses after returning home are loaded
-            // again from the on-disk icon database.
+            // Keep the HOME process lean when Launcher is not visible so the Low Memory
+            // Killer (LMK) doesn't evict the launcher process. Bound views retain the icons
+            // they are displaying; cache misses are re-loaded smoothly from disk on demand.
             LauncherAppState.getInstance(this).getIconCache().clearMemoryCache();
         }
     }

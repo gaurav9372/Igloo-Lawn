@@ -345,6 +345,7 @@ public class RecentsModel implements RecentTasksDataSource, TaskStackChangeListe
     public void onTrimMemory(int level) {
         if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
             mThumbnailCache.getHighResLoadingState().setVisible(false);
+            mThumbnailCache.clear();
         }
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
                 || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
