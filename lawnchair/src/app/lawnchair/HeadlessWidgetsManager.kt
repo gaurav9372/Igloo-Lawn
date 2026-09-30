@@ -137,7 +137,7 @@ class HeadlessWidgetsManager @Inject constructor(
             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
     }
 
-    private class WidgetNotBoundException : RuntimeException()
+    class WidgetNotBoundException : RuntimeException()
 
     companion object {
 

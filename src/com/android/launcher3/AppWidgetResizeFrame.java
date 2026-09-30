@@ -272,18 +272,20 @@ public class AppWidgetResizeFrame extends AbstractFloatingView implements View.O
             DragLayer dragLayer, boolean force, boolean unlimited) {
         mCellLayout = cellLayout;
         mWidgetView = widgetView;
-        LauncherAppWidgetProviderInfo info = (LauncherAppWidgetProviderInfo)
-                widgetView.getAppWidgetInfo();
+        AppWidgetProviderInfo pInfo = widgetView.getAppWidgetInfo();
+        LauncherAppWidgetProviderInfo info = (pInfo instanceof LauncherAppWidgetProviderInfo)
+                ? (LauncherAppWidgetProviderInfo) pInfo : null;
         mDragLayer = dragLayer;
         InvariantDeviceProfile idp = LauncherAppState.getIDP(cellLayout.getContext());
 
         int resizeMode;
         if (force) {
             resizeMode = AppWidgetProviderInfo.RESIZE_BOTH;
+        } else if (pInfo != null) {
+            resizeMode = pInfo.resizeMode;
         } else {
-            resizeMode = info.resizeMode;
+            resizeMode = AppWidgetProviderInfo.RESIZE_NONE;
         }
-
 
         if (unlimited) {
             mMinHSpan = 1;
@@ -294,11 +296,16 @@ public class AppWidgetResizeFrame extends AbstractFloatingView implements View.O
             if (resizeMode != AppWidgetProviderInfo.RESIZE_NONE) {
                 resizeMode = AppWidgetProviderInfo.RESIZE_BOTH;
             }
-        } else {
+        } else if (info != null) {
             mMinHSpan = info.minSpanX;
             mMinVSpan = info.minSpanY;
             mMaxHSpan = info.maxSpanX;
             mMaxVSpan = info.maxSpanY;
+        } else {
+            mMinHSpan = 1;
+            mMinVSpan = 1;
+            mMaxHSpan = idp.numColumns;
+            mMaxVSpan = idp.numRows;
         }
 
         LauncherAppWidgetInfo widgetInfoOnView = (LauncherAppWidgetInfo) mWidgetView.getTag();
@@ -581,6 +588,9 @@ public class AppWidgetResizeFrame extends AbstractFloatingView implements View.O
 
         // We are done with resizing the widget. Save the widget size & position to LauncherModel
         resizeWidgetIfNeeded(true);
+        if (mCellLayout != null && mWidgetView != null) {
+            mCellLayout.markCellsAsOccupiedForView(mWidgetView);
+        }
         mLauncher.getStatsLogManager()
                 .logger()
                 .withInstanceId(logInstanceId)
@@ -806,6 +816,9 @@ public class AppWidgetResizeFrame extends AbstractFloatingView implements View.O
         }
         mDragLayer.removeView(this);
         mWidgetView.removeOnLayoutChangeListener(mWidgetViewLayoutListener);
+        if (mCellLayout != null && mWidgetView != null) {
+            mCellLayout.markCellsAsOccupiedForView(mWidgetView);
+        }
     }
 
     private void updateInvalidResizeEffect(CellLayout cellLayout, CellLayout pairedCellLayout,

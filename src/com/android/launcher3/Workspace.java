@@ -2506,8 +2506,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     private Runnable getWidgetResizeFrameRunnable(DragOptions options,
             LauncherAppWidgetHostView hostView, CellLayout cellLayout, boolean force) {
         AppWidgetProviderInfo pInfo = hostView.getAppWidgetInfo();
-        boolean shouldResize = (pInfo.resizeMode != AppWidgetProviderInfo.RESIZE_NONE) || force;
-        if (pInfo != null && shouldResize && !options.isAccessibleDrag) {
+        if (pInfo != null && !options.isAccessibleDrag
+                && ((pInfo.resizeMode != AppWidgetProviderInfo.RESIZE_NONE) || force)) {
             return () -> {
                 if (!isPageInTransition()) {
                     AppWidgetResizeFrame.showForWidget(hostView, cellLayout);
@@ -3494,10 +3494,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
         }
         applyScreenOrderToChildViews();
         if (screenSwapMap.size() > 0) {
-            mLauncher.getModelWriter().persistWorkspaceScreenOrderSync(getPersistableScreenOrder());
-            mDeferStripEmptyScreensForScreenRemap = true;
-            mLauncher.getModelWriter().moveWorkspaceScreensInDatabase(
-                    screenSwapMap, this::onWorkspaceScreenRemapFinished);
+            persistCurrentScreenOrderSync();
         }
         int remappedDefaultPage = mScreenOrder.indexOf(defaultScreenId);
         if (remappedDefaultPage >= 0 && remappedDefaultPage != defaultPage) {
@@ -3611,7 +3608,7 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
     @VisibleForTesting
     static boolean shouldPreserveEmptyScreenWhenStripping(
             int screenId, IntSet persistedScreenIds, boolean isExtraEmptyScreen) {
-        return persistedScreenIds.contains(screenId) && !isExtraEmptyScreen;
+        return screenId == FIRST_SCREEN_ID || isExtraEmptyScreen;
     }
 
     private void onWorkspaceScreenRemapFinished() {

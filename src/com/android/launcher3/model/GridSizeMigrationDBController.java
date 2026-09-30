@@ -636,6 +636,12 @@ public class GridSizeMigrationDBController {
 
                             break;
                         }
+                        case LauncherSettings.Favorites.ITEM_TYPE_CUSTOM_APPWIDGET: {
+                            entry.appWidgetId = c.getInt(indexAppWidgetId);
+                            entry.minSpanX = entry.spanX > 0 ? entry.spanX : 2;
+                            entry.minSpanY = entry.spanY > 0 ? entry.spanY : 2;
+                            break;
+                        }
                         case LauncherSettings.Favorites.ITEM_TYPE_FOLDER: {
                             int total = getFolderItemsCount(entry);
                             if (total == 0) {

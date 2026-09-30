@@ -75,10 +75,10 @@ class WorkspacePageReorderTest {
     }
 
     @Test
-    fun shouldPreserveEmptyScreenWhenStripping_skipsPersistedNonExtraScreens() {
+    fun shouldPreserveEmptyScreenWhenStripping_preservesFirstScreenAndExtraScreen() {
         val persisted = IntSet.wrap(0, 1, 2)
         assertThat(
-            Workspace.shouldPreserveEmptyScreenWhenStripping(2, persisted, false),
+            Workspace.shouldPreserveEmptyScreenWhenStripping(0, persisted, false),
         ).isTrue()
         assertThat(
             Workspace.shouldPreserveEmptyScreenWhenStripping(
@@ -86,6 +86,9 @@ class WorkspacePageReorderTest {
                 persisted,
                 true,
             ),
+        ).isTrue()
+        assertThat(
+            Workspace.shouldPreserveEmptyScreenWhenStripping(2, persisted, false),
         ).isFalse()
         assertThat(
             Workspace.shouldPreserveEmptyScreenWhenStripping(3, persisted, false),

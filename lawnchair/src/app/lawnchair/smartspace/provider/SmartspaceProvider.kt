@@ -15,6 +15,7 @@ import com.android.launcher3.util.DaggerSingletonObject
 import com.android.launcher3.util.SafeCloseable
 import javax.inject.Inject
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.shareIn
 class SmartspaceProvider @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : SafeCloseable {
+
+    private val scope = MainScope()
 
     val dataSources = listOf(
         SmartspaceWidgetReader(context),
@@ -37,7 +40,7 @@ class SmartspaceProvider @Inject constructor(
         .map { it.targets }
         .reduce { acc, flow -> flow.combine(acc) { a, b -> a + b } }
         .shareIn(
-            MainScope(),
+            scope,
             SharingStarted.WhileSubscribed(),
             replay = 1,
         )
@@ -76,7 +79,8 @@ class SmartspaceProvider @Inject constructor(
     }
 
     override fun close() {
-        TODO("Not yet implemented")
+        scope.cancel()
+        dataSources.forEach { (it as? SafeCloseable)?.close() }
     }
 
     companion object {

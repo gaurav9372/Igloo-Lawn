@@ -51,9 +51,10 @@ open class WidgetSizeHandler @Inject constructor(@ApplicationContext private val
     ) {
         Executors.UI_HELPER_EXECUTOR.execute {
             val widgetManager = AppWidgetManager.getInstance(context)
-            val sizeOptions = WidgetSizes.getWidgetSizeOptions(context, info.provider, spanX, spanY)
+            val sizeOptions = WidgetSizes.getWidgetSizeOptions(context, info.provider, spanX, spanY) ?: return@execute
             val currentOptions = widgetManager.getAppWidgetOptions(widgetId)
-            if (sizeOptions.getWidgetSizeList() != currentOptions.getWidgetSizeList() ||
+            if (currentOptions == null ||
+                sizeOptions.getWidgetSizeList() != currentOptions.getWidgetSizeList() ||
                 sizeOptions.getInt(OPTION_APPWIDGET_MIN_WIDTH) != currentOptions.getInt(OPTION_APPWIDGET_MIN_WIDTH) ||
                 sizeOptions.getInt(OPTION_APPWIDGET_MIN_HEIGHT) != currentOptions.getInt(OPTION_APPWIDGET_MIN_HEIGHT) ||
                 sizeOptions.getInt(OPTION_APPWIDGET_MAX_WIDTH) != currentOptions.getInt(OPTION_APPWIDGET_MAX_WIDTH) ||

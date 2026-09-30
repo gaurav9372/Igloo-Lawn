@@ -3,6 +3,7 @@ package app.lawnchair.smartspace.provider
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import app.lawnchair.HeadlessWidgetsManager
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.smartspace.model.SmartspaceTarget
 import com.patrykmichalik.opto.domain.Preference
@@ -34,7 +35,7 @@ sealed class SmartspaceDataSource(
         }
         .map { State(targets = it) }
         .catch {
-            if (it is RequiresSetupException) {
+            if (it is RequiresSetupException || it is HeadlessWidgetsManager.WidgetNotBoundException) {
                 emit(
                     State(
                         targets = disabledTargets,

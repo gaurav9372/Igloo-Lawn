@@ -889,6 +889,7 @@ public class Launcher extends StatefulActivity<LauncherState>
                         () -> getStateManager().goToState(NORMAL));
             } else {
                 CellPos presenterPos = getCellPosMapper().mapModelToPresenter(requestArgs);
+                int dropScreenId = presenterPos.screenId;
                 if (requestArgs.container == CONTAINER_DESKTOP) {
                     // When the screen id represents an actual screen (as opposed to a rank)
                     // we make sure that the drop page actually exists.
@@ -896,16 +897,21 @@ public class Launcher extends StatefulActivity<LauncherState>
                     requestArgs.screenId = getCellPosMapper().mapPresenterToModel(
                             presenterPos.cellX, presenterPos.cellY, newScreenId, CONTAINER_DESKTOP)
                                     .screenId;
+                    dropScreenId = newScreenId;
                 }
                 final CellLayout dropLayout =
-                        mWorkspace.getScreenWithId(presenterPos.screenId);
+                        mWorkspace.getScreenWithId(dropScreenId);
 
-                dropLayout.setDropPending(true);
+                if (dropLayout != null) {
+                    dropLayout.setDropPending(true);
+                }
                 final Runnable onComplete = new Runnable() {
                     @Override
                     public void run() {
                         completeTwoStageWidgetDrop(resultCode, appWidgetId, requestArgs);
-                        dropLayout.setDropPending(false);
+                        if (dropLayout != null) {
+                            dropLayout.setDropPending(false);
+                        }
                     }
                 };
                 mWorkspace.removeExtraEmptyScreenDelayed(
@@ -1506,13 +1512,15 @@ public class Launcher extends StatefulActivity<LauncherState>
             // Show resize frame on the newly inflated LauncherAppWidgetHostView.
             LauncherAppWidgetHostView reInflatedHostView =
                     getWorkspace().getWidgetForAppWidgetId(appWidgetId);
-            showWidgetResizeFrame(
-                    reInflatedHostView,
-                    (LauncherAppWidgetInfo) reInflatedHostView.getTag(),
-                    presenterPos);
-            // We always update widget size after re-inflating PendingAppWidgetHostView
-            WidgetSizes.updateWidgetSizeRanges(
-                    reInflatedHostView, this, itemInfo.spanX, itemInfo.spanY);
+            if (reInflatedHostView != null) {
+                showWidgetResizeFrame(
+                        reInflatedHostView,
+                        (LauncherAppWidgetInfo) reInflatedHostView.getTag(),
+                        presenterPos);
+                // We always update widget size after re-inflating PendingAppWidgetHostView
+                WidgetSizes.updateWidgetSizeRanges(
+                        reInflatedHostView, this, itemInfo.spanX, itemInfo.spanY);
+            }
             return;
         }
         if (updateWidgetSize) {
