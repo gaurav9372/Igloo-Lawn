@@ -26,6 +26,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.launcher3.compat.AccessibilityManagerCompat;
@@ -99,16 +100,24 @@ public abstract class FastScrollRecyclerView extends RecyclerView  {
      * Saved the scroll position
      */
     public void saveScrollPosition() {
-        savedScrollPosition = PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())
-                ? computeVerticalScrollOffset()
-                : 0;
+        if (PreferenceCacheExtensionsKt.firstCached(pref2.getRememberPosition())) {
+            LayoutManager lm = getLayoutManager();
+            if (lm instanceof LinearLayoutManager) {
+                int pos = ((LinearLayoutManager) lm).findFirstVisibleItemPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    savedScrollPosition = pos;
+                    return;
+                }
+            }
+        }
+        savedScrollPosition = 0;
     }
 
     /**
      * Restore the scroll position to the previously saved position.
      */
     public void restoreScrollPosition() {
-        if (savedScrollPosition != RecyclerView.NO_POSITION) {
+        if (getLayoutManager() != null && savedScrollPosition != RecyclerView.NO_POSITION && savedScrollPosition > 0) {
             scrollToPosition(savedScrollPosition);
         }
     }
@@ -231,7 +240,9 @@ public abstract class FastScrollRecyclerView extends RecyclerView  {
         if (mScrollbar != null) {
             mScrollbar.reattachThumbToScroll();
         }
-        saveScrollPosition();
-        scrollToPosition(savedScrollPosition);
+        savedScrollPosition = 0;
+        if (getLayoutManager() != null) {
+            scrollToPosition(0);
+        }
     }
 }
