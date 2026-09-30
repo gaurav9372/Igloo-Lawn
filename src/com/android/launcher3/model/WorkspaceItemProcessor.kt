@@ -445,16 +445,22 @@ class WorkspaceItemProcessor(
      */
     private fun retryDeepShortcutById(key: ShortcutKey): ShortcutInfo? {
         FileLog.d(TAG, "retryDeepShortcutById: package=${key.packageName}, shortcutId=${key.id}")
-        return launcherApps
-            .getShortcuts(
-                ShortcutQuery().apply {
-                    setPackage(key.packageName)
-                    setShortcutIds(listOf(key.id))
-                    setQueryFlags(ShortcutRequest.ALL)
-                },
-                key.user,
-            )
-            ?.firstOrNull()
+        return try {
+            if (!launcherApps.hasShortcutHostPermission()) return null
+            launcherApps
+                .getShortcuts(
+                    ShortcutQuery().apply {
+                        setPackage(key.packageName)
+                        setShortcutIds(listOf(key.id))
+                        setQueryFlags(ShortcutRequest.ALL)
+                    },
+                    key.user,
+                )
+                ?.firstOrNull()
+        } catch (e: Exception) {
+            FileLog.d(TAG, "Failed to query for shortcut by id: ${e.message}")
+            null
+        }
     }
 
     /**

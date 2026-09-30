@@ -342,7 +342,9 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
+        try {
+            super.onTrimMemory(level)
+        } catch (_: Exception) {}
         if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
             try {
                 FontCache.INSTANCE.get(this).onTrimMemory(level)

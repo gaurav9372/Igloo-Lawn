@@ -98,11 +98,17 @@ public class ShortcutRequest {
         }
         mQuery.setQueryFlags(flags);
 
+        LauncherApps launcherApps = mContext.getSystemService(LauncherApps.class);
+        if (launcherApps == null) {
+            return QueryResult.DEFAULT;
+        }
         try {
-            return new QueryResult(mContext.getSystemService(LauncherApps.class)
-                    .getShortcuts(mQuery, mUserHandle));
+            if (!launcherApps.hasShortcutHostPermission()) {
+                return QueryResult.DEFAULT;
+            }
+            return new QueryResult(launcherApps.getShortcuts(mQuery, mUserHandle));
         } catch (SecurityException | IllegalStateException e) {
-            FileLog.e(TAG, "Failed to query for shortcuts", e);
+            FileLog.d(TAG, "Failed to query for shortcuts: " + e.getMessage());
             return QueryResult.DEFAULT;
         }
     }

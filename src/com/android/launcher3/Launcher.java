@@ -230,6 +230,7 @@ import com.android.launcher3.util.BackPressHandler;
 import com.android.launcher3.util.CannedAnimationCoordinator;
 import com.android.launcher3.util.ComponentKey;
 import com.android.launcher3.util.ContextTracker;
+import com.android.launcher3.util.Executors;
 import com.android.launcher3.util.IntSet;
 import com.android.launcher3.util.ItemInflater;
 import com.android.launcher3.util.KeyboardShortcutsDelegate;
@@ -2193,7 +2194,17 @@ public class Launcher extends StatefulActivity<LauncherState>
             // Keep the HOME process lean when Launcher is not visible so the Low Memory
             // Killer (LMK) doesn't evict the launcher process. Bound views retain the icons
             // they are displaying; cache misses are re-loaded smoothly from disk on demand.
-            LauncherAppState.getInstance(this).getIconCache().clearMemoryCache();
+            // Note: BaseIconCache asserts execution on worker thread (MODEL_EXECUTOR).
+            Context appContext = getApplicationContext();
+            Executors.MODEL_EXECUTOR.execute(() -> {
+                try {
+                    LauncherAppState appState = LauncherAppState.getInstance(appContext);
+                    if (appState != null) {
+                        appState.getIconCache().clearMemoryCache();
+                    }
+                } catch (Exception ignored) {
+                }
+            });
         }
     }
 
