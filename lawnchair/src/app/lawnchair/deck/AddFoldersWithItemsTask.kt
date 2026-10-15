@@ -22,6 +22,7 @@ import com.android.launcher3.util.PackageManagerHelper
  */
 class AddFoldersWithItemsTask(
     private val folders: List<FolderInfo>,
+    private val singleApps: List<WorkspaceItemInfo> = emptyList(),
     private val onComplete: (() -> Unit)? = null,
 ) : LauncherModel.ModelUpdateTask {
 
@@ -36,10 +37,6 @@ class AddFoldersWithItemsTask(
         val model = LauncherAppState.getInstance(context).model
         val itemSpaceFinder = WorkspaceItemSpaceFinder(dataModel, idp, model)
 
-        if (folders.isEmpty()) {
-            return
-        }
-
         val addedItemsFinal = ArrayList<ItemInfo>()
         val addedWorkspaceScreensFinal = IntArray()
 
@@ -48,6 +45,11 @@ class AddFoldersWithItemsTask(
             val modelWriter = taskController.getModelWriter()
 
             folders.forEach { folderInfo ->
+                // Do not bind shortcuts which were skipped in the database as ghost icons.
+                folderInfo.getContents().removeAll { item ->
+                    item is WorkspaceItemInfo && shortcutExists(dataModel, item.intent, item.user)
+                }
+                if (folderInfo.getContents().isEmpty()) return@forEach
                 // Find space for the folder
                 val coords = itemSpaceFinder.findSpaceForItem(
                     workspaceScreens,
@@ -74,11 +76,7 @@ class AddFoldersWithItemsTask(
                 // Items need to be added with proper rank/position
                 folderInfo.getContents().forEachIndexed { index, item ->
                     if (item is WorkspaceItemInfo) {
-                        // Check if item already exists on workspace
-                        if (shortcutExists(dataModel, item.intent, item.user)) {
-                            return@forEachIndexed
-                        }
-
+                        item.rank = index
                         // Add item to folder using folder's ID as container
                         // Use rank as position - folder will arrange items
                         modelWriter.addOrMoveItemInDatabase(
@@ -93,21 +91,36 @@ class AddFoldersWithItemsTask(
 
                 addedItemsFinal.add(folderInfo)
             }
+            singleApps.forEach { item ->
+                if (!shortcutExists(dataModel, item.intent, item.user)) {
+                    val coords = itemSpaceFinder.findSpaceForItem(
+                        workspaceScreens,
+                        addedWorkspaceScreensFinal,
+                        addedItemsFinal,
+                        item.spanX,
+                        item.spanY,
+                        context,
+                    )
+                    modelWriter.addItemToDatabase(
+                        item,
+                        LauncherSettings.Favorites.CONTAINER_DESKTOP,
+                        coords[0],
+                        coords[1],
+                        coords[2],
+                    )
+                    addedItemsFinal.add(item)
+                }
+            }
         }
 
         // Schedule callback to bind items
         if (addedItemsFinal.isNotEmpty()) {
             taskController.scheduleCallbackTask { callbacks ->
-
                 callbacks.bindItemsAdded(addedItemsFinal)
-
-                // Notify completion after items are bound
-                onComplete?.invoke()
             }
-        } else {
-            // No items to add, notify completion immediately
-            onComplete?.invoke()
         }
+        // Writes are complete. Notify once, after binding, even when there are no UI callbacks.
+        com.android.launcher3.util.Executors.MAIN_EXECUTOR.execute { onComplete?.invoke() }
     }
 
     /**

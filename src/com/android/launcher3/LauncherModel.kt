@@ -84,6 +84,8 @@ constructor(
 
     private val mCallbacksList = ArrayList<BgDataModel.Callbacks>(1)
 
+    val drawerLoadProgress = com.android.launcher3.allapps.DrawerLoadProgress()
+
     private val mLock = Any()
 
     private var mLoaderTask: LoaderTask? = null
@@ -292,6 +294,7 @@ constructor(
                 } else {
                     val task = loaderFactory.newLoaderTask(launcherBinder, UserManagerState())
                     mLoaderTask = task
+                    task.startDrawerLoading()
 
                     // Always post the loader task, instead of running directly
                     // (even on same thread) so that we exit any nested synchronized blocks

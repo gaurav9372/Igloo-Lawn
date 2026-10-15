@@ -155,11 +155,19 @@ public class BaseLauncherBinder {
      * Binds the all apps results from LoaderTask to the callbacks UX.
      */
     public void bindAllApps() {
+        bindAllApps(() -> { });
+    }
+
+    /** Invokes onBound on main only after the current drawer data has been bound. */
+    public void bindAllApps(Runnable onBound) {
         // shallow copy
         AppsListData data = mBgAllAppsList.getImmutableData();
         executeCallbacksTask(c -> c.bindAllApplications(
                 data.getApps(), data.getFlags(), data.getPackageUserKeyToUidMap()),
                 mUiExecutor);
+        mUiExecutor.execute(() -> {
+            if (mMyBindingId == mBgDataModel.lastBindId) onBound.run();
+        });
     }
 
     /**

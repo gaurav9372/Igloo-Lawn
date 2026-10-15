@@ -285,6 +285,14 @@ public class AllAppsList {
      */
     public List<LauncherActivityInfo> addPackage(
             Context context, String packageName, UserHandle user) {
+        // Some freezers report re-enabling as an add. Frozen entries are retained,
+        // so add() alone would ignore them and leave their old disabled flags intact.
+        for (AppInfo info : data) {
+            if (user.equals(info.user)
+                    && packageName.equals(info.componentName.getPackageName())) {
+                return updatePackage(context, packageName, user);
+            }
+        }
         List<LauncherActivityInfo> activities = context.getSystemService(LauncherApps.class)
                 .getActivityList(packageName, user);
 
@@ -380,8 +388,8 @@ public class AllAppsList {
                     applicationInfo.intent = launchIntent;
                     AppInfo.updateRuntimeFlagsForActivityTarget(applicationInfo, info,
                             userCache.getUserInfo(user), apiWrapper, pmHelper);
-                    // Clear disabled flags as app is enabled
-                    applicationInfo.runtimeStatusFlags &= ~com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
+                    // Activity flags above determine whether the app is still disabled.
+                    // Availability alone must not erase a real package/component restriction.
                     applicationInfo.runtimeStatusFlags &= ~com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_NOT_AVAILABLE;
                     mDataChanged = true;
                 }

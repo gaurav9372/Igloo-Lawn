@@ -123,27 +123,13 @@ fun ColumnScope.RestoreBackupOptions(
     val backupContents = backup.info.contents
     val contents by viewModel.backupContents.collectAsStateWithLifecycle()
 
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var restoringBackup by remember { mutableStateOf(false) }
+    val restoringBackup by viewModel.restoring.collectAsStateWithLifecycle()
     if (restoringBackup) {
         BackHandler {}
     }
 
     fun restoreBackup() {
-        if (restoringBackup) return
-        scope.launch {
-            restoringBackup = true
-            try {
-                backup.restore(contents)
-                Toast.makeText(context, R.string.backup_restore_success, Toast.LENGTH_SHORT).show()
-                restartLauncher(context)
-            } catch (t: Throwable) {
-                Log.e("RestoreBackupScreen", "failed to restore backup", t)
-                Toast.makeText(context, R.string.backup_restore_error, Toast.LENGTH_SHORT).show()
-            }
-            restoringBackup = false
-        }
+        viewModel.restore(contents)
     }
 
     if (isPortrait) {

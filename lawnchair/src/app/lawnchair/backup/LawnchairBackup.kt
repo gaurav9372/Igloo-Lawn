@@ -7,11 +7,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.graphics.drawable.toBitmap
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.room.withTransaction
 import app.lawnchair.LawnchairProto.BackupInfo
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.category.CategoryInfoEntity
 import app.lawnchair.data.category.CategoryItemEntity
+import app.lawnchair.data.folder.FolderInfoEntity
+import app.lawnchair.data.folder.FolderItemEntity
+import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.preferences2.firstCached
 import app.lawnchair.util.hasFlag
 import app.lawnchair.util.scaleDownTo
 import app.lawnchair.util.scaleDownToDisplaySize
@@ -20,6 +27,7 @@ import app.lawnchair.wallpaper.WallpaperManagerCompat
 import com.android.launcher3.BuildConfig
 import com.android.launcher3.LauncherAppState
 import com.android.launcher3.LauncherFiles
+import com.android.launcher3.LauncherPrefs
 import com.android.launcher3.R
 import com.android.launcher3.model.DeviceGridState
 import com.android.launcher3.model.ModelDbController
@@ -28,8 +36,8 @@ import com.google.protobuf.Timestamp
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.zip.ZipEntry
@@ -37,16 +45,13 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-
-import app.lawnchair.data.folder.FolderInfoEntity
-import app.lawnchair.data.folder.FolderItemEntity
-import app.lawnchair.preferences.PreferenceManager
-import app.lawnchair.preferences2.PreferenceManager2
-import app.lawnchair.preferences2.firstCached
 
 class LawnchairBackup(
     private val context: Context,
@@ -71,42 +76,105 @@ class LawnchairBackup(
         wallpaper = tmpWallpaper?.scaleDownToDisplaySize(context)
     }
 
-    suspend fun restore(selectedContents: Int) = withContext(Dispatchers.IO) {
+    suspend fun restore(selectedContents: Int) = BackupState.mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) { restoreLocked(selectedContents) }
+    }
+
+    private suspend fun restoreLocked(selectedContents: Int) {
         val contents = selectedContents and info.contents
         val stagedRestore = stageRestoreArchive(contents)
-        val replacements = mutableListOf<FileReplacement>()
-        val previousGridState = DeviceGridState(context)
+        val includeLayout = contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)
+        var importedDb: AppDatabase? = null
+        var importedLauncher: ModelDbController? = null
+        var preserveRecoveryFiles = false
+        var deferredCallbacks: com.android.launcher3.util.SafeCloseable? = null
         try {
             val categoriesJson = stagedRestore.files[CATEGORIES_FILE_NAME]?.readText()
             val foldersJson = stagedRestore.files[FOLDERS_FILE_NAME]?.readText()
-
-            // Parse every structured payload before replacing or deleting any live data.
             categoriesJson?.let(::parseCategoriesJson)
             foldersJson?.let(::parseFoldersJson)
             stagedRestore.files[WALLPAPER_FILE_NAME]?.let(::validateWallpaperFile)
-
-            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-                AppDatabase.INSTANCE.get(context).checkpoint()
-                AppDatabase.reset(context)
-                installStagedLayoutFiles(stagedRestore, replacements)
+            val sharedPreferences = stagedRestore.files[PREFS_FILE_NAME]?.let(BackupState::readSharedPreferences)
+            val dataStorePreferences = stagedRestore.files[PREFS_DATASTORE_FILE_NAME]?.let { BackupState.readDataStore(it) }
+            if (includeLayout) {
+                importedDb = stagedRestore.files[PREFS_DB_FILE_NAME]?.let {
+                    BackupState.openDatabase(context, it).also { db ->
+                        importedDb = db
+                        db.openHelper.writableDatabase // Migrate and validate before touching live data.
+                    }
+                }
+                importedLauncher = ModelDbController.openSnapshot(context, stagedRestore.files.getValue(LAUNCHER_DB_FILE_NAME))
+                if (!RestoreDbTask.performRestore(context, importedLauncher)) {
+                    throw IOException("Unable to validate restored workspace")
+                }
             }
-
-            if (contents.hasFlag(INCLUDE_CATEGORIES) && categoriesJson != null) {
-                restoreCategoriesFromJson(context, categoriesJson)
+            val appState = LauncherAppState.getInstance(context)
+            val prefs2 = PreferenceManager2.getInstance(context)
+            val liveDb = AppDatabase.INSTANCE.get(context)
+            if (includeLayout) deferredCallbacks = PreferenceManager.getInstance(context).deferChangeCallbacks()
+            // Serialize all workspace changes; Room and preferences keep their live instances.
+            BackupState.onModelThread {
+                runBlocking {
+                    val controller = appState.model.modelDbController
+                    val previousShared = LauncherPrefs.getPrefs(context).all
+                    val previousDataStore = prefs2.preferencesDataStore.data.first()
+                    val rollbackDbFile = File(stagedRestore.directory, "rollback-preferences")
+                    BackupState.writeDatabaseSnapshot(context, rollbackDbFile)
+                    BackupState.writeSharedPreferences(File(stagedRestore.directory, "rollback-shared.xml"), previousShared)
+                    BackupState.writeDataStore(File(stagedRestore.directory, "rollback.preferences_pb"), previousDataStore)
+                    val tables = if (includeLayout) BackupState.allTables else BackupState.categoryTables
+                    try {
+                        importedDb?.let {
+                            BackupState.copyTables(it, liveDb, BackupState.layoutTables)
+                        }
+                        if (sharedPreferences != null) BackupState.applySharedPreferences(context, sharedPreferences)
+                        if (dataStorePreferences != null) {
+                            prefs2.preferencesDataStore.updateData {
+                                if (contents.hasFlag(INCLUDE_CATEGORIES)) {
+                                    dataStorePreferences
+                                } else {
+                                    // Category membership and its UI state are a separate restore option.
+                                    dataStorePreferences.toMutablePreferences().apply {
+                                        val orderKey = stringPreferencesKey("category_order_pref")
+                                        val collapsedKey = stringSetPreferencesKey("collapsed_category_ids")
+                                        remove(orderKey)
+                                        remove(collapsedKey)
+                                        previousDataStore[orderKey]?.let { this[orderKey] = it }
+                                        previousDataStore[collapsedKey]?.let { this[collapsedKey] = it }
+                                    }
+                                }
+                            }
+                        }
+                        if (categoriesJson != null) restoreCategoriesFromJson(context, categoriesJson)
+                        if (includeLayout && foldersJson != null) restoreFoldersFromJson(context, foldersJson)
+                        if (includeLayout) {
+                            // Import into the actual live DB, so migration must start from this name.
+                            val dbName = File(controller.db.path).name
+                            DeviceGridState(info.gridState).writeToPrefs(context, true)
+                            check(
+                                LauncherPrefs.getPrefs(context).edit()
+                                    .putString(DeviceGridState.KEY_DB_FILE, dbName).commit(),
+                            )
+                            controller.replaceFavoritesFrom(importedLauncher!!)
+                        }
+                    } catch (t: Throwable) {
+                        val rollbackActions = listOf<suspend () -> Unit>(
+                            { BackupState.openDatabase(context, rollbackDbFile).useSnapshot { BackupState.copyTables(it, liveDb, tables) } },
+                            { prefs2.preferencesDataStore.updateData { previousDataStore } },
+                            { BackupState.applySharedPreferences(context, previousShared) },
+                        )
+                        for (rollback in rollbackActions) {
+                            try {
+                                rollback()
+                            } catch (rollbackFailure: Throwable) {
+                                preserveRecoveryFiles = true
+                                t.addSuppressed(rollbackFailure)
+                            }
+                        }
+                        throw t
+                    }
+                }
             }
-            if (
-                (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) || contents.hasFlag(INCLUDE_CATEGORIES)) &&
-                foldersJson != null
-            ) {
-                restoreFoldersFromJson(context, foldersJson)
-            }
-
-            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-                DeviceGridState(info.gridState).writeToPrefs(context, true)
-            }
-            val dbController = ModelDbController(context)
-            RestoreDbTask.performRestore(context, dbController)
-            replacements.forEach { it.backup?.delete() }
             if (contents.hasFlag(INCLUDE_WALLPAPER)) {
                 runCatching {
                     stagedRestore.files[WALLPAPER_FILE_NAME]?.inputStream()?.use { input ->
@@ -114,21 +182,15 @@ class LawnchairBackup(
                     }
                 }
             }
-        } catch (t: Throwable) {
-            AppDatabase.reset(context)
-            rollbackFileReplacements(replacements)
-            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-                previousGridState.writeToPrefs(context, true)
-            }
-            throw t
         } finally {
-            stagedRestore.directory.deleteRecursively()
+            deferredCallbacks?.close()
+            importedLauncher?.closeSnapshot()
+            importedDb?.close()
+            if (!preserveRecoveryFiles) stagedRestore.directory.deleteRecursively()
         }
     }
 
     private data class StagedRestore(val directory: File, val files: Map<String, File>)
-
-    private data class FileReplacement(val target: File, val backup: File?)
 
     private suspend fun stageRestoreArchive(contents: Int): StagedRestore = withContext(Dispatchers.IO) {
         val directory = File(context.cacheDir, "restore-${System.nanoTime()}")
@@ -139,7 +201,7 @@ class LawnchairBackup(
             }
             if (contents.hasFlag(INCLUDE_WALLPAPER)) add(WALLPAPER_FILE_NAME)
             if (contents.hasFlag(INCLUDE_CATEGORIES)) add(CATEGORIES_FILE_NAME)
-            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS) || contents.hasFlag(INCLUDE_CATEGORIES)) {
+            if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
                 add(FOLDERS_FILE_NAME)
             }
         }
@@ -186,60 +248,6 @@ class LawnchairBackup(
         WALLPAPER_FILE_NAME -> 64L * 1024 * 1024
         CATEGORIES_FILE_NAME, FOLDERS_FILE_NAME -> 16L * 1024 * 1024
         else -> 16L * 1024 * 1024
-    }
-
-    private fun installStagedLayoutFiles(
-        stagedRestore: StagedRestore,
-        replacements: MutableList<FileReplacement>,
-    ) {
-        val restoreTargets = getFiles(context, forRestore = true)
-        stagedRestore.files.forEach { (name, stagedFile) ->
-            val target = restoreTargets[name] ?: return@forEach
-            target.parentFile?.mkdirs()
-            replaceFile(stagedFile, target, stagedRestore.directory, replacements)
-            if (name == LAUNCHER_DB_FILE_NAME || name == PREFS_DB_FILE_NAME) {
-                archiveFile(File(target.path + "-wal"), stagedRestore.directory, replacements)
-                archiveFile(File(target.path + "-shm"), stagedRestore.directory, replacements)
-            }
-        }
-    }
-
-    private fun replaceFile(
-        source: File,
-        target: File,
-        stagingDirectory: File,
-        replacements: MutableList<FileReplacement>,
-    ) {
-        val pending = File(target.parentFile, "${target.name}.restore-pending")
-        pending.delete()
-        source.copyTo(pending, overwrite = true)
-        archiveFile(target, stagingDirectory, replacements)
-        if (!pending.renameTo(target)) {
-            pending.delete()
-            throw IOException("Unable to install ${target.name}")
-        }
-    }
-
-    private fun archiveFile(
-        target: File,
-        stagingDirectory: File,
-        replacements: MutableList<FileReplacement>,
-    ) {
-        val backup = if (target.exists()) {
-            File(stagingDirectory, "rollback-${replacements.size}-${target.name}").also { rollback ->
-                if (!target.renameTo(rollback)) throw IOException("Unable to stage ${target.name} for rollback")
-            }
-        } else {
-            null
-        }
-        replacements += FileReplacement(target, backup)
-    }
-
-    private fun rollbackFileReplacements(replacements: List<FileReplacement>) {
-        replacements.asReversed().forEach { replacement ->
-            replacement.target.delete()
-            replacement.backup?.renameTo(replacement.target)
-        }
     }
 
     private fun validateWallpaperFile(file: File) {
@@ -326,6 +334,7 @@ class LawnchairBackup(
             val arr = JSONArray()
             categoriesWithItems.sortedBy { it.category.rank }.forEach { categoryWithItems ->
                 val obj = JSONObject()
+                obj.put("id", categoryWithItems.category.id)
                 obj.put("rank", categoryWithItems.category.rank)
                 obj.put("title", categoryWithItems.category.title)
                 obj.put("hide", categoryWithItems.category.hide)
@@ -345,6 +354,7 @@ class LawnchairBackup(
          * Restores categories and categoryOrder preference from JSON string.
          */
         private data class ParsedCategory(
+            val id: Int,
             val rank: Int,
             val title: String,
             val hide: Boolean,
@@ -367,6 +377,7 @@ class LawnchairBackup(
                 val obj = arr.getJSONObject(index)
                 val appsArray = obj.optJSONArray("apps") ?: JSONArray()
                 ParsedCategory(
+                    id = obj.optInt("id", 0).coerceAtLeast(0),
                     rank = obj.optInt("rank", index),
                     title = obj.optString("title", "Category ${index + 1}"),
                     hide = obj.optBoolean("hide", false),
@@ -393,6 +404,7 @@ class LawnchairBackup(
                 parsed.categories.forEach { category ->
                     val newCategoryId = dao.insertCategory(
                         CategoryInfoEntity(
+                            id = category.id,
                             title = category.title,
                             hide = category.hide,
                             rank = category.rank,
@@ -444,6 +456,7 @@ class LawnchairBackup(
          * Restores App Drawer folders and folderOrder preference from JSON string.
          */
         private data class ParsedFolder(
+            val id: Int,
             val rank: Int,
             val title: String,
             val hide: Boolean,
@@ -466,6 +479,7 @@ class LawnchairBackup(
                 val obj = arr.getJSONObject(index)
                 val appsArray = obj.optJSONArray("apps") ?: JSONArray()
                 ParsedFolder(
+                    id = obj.optInt("id", 0).coerceAtLeast(0),
                     rank = obj.optInt("rank", index),
                     title = obj.optString("title", "Folder ${index + 1}"),
                     hide = obj.optBoolean("hide", false),
@@ -492,6 +506,7 @@ class LawnchairBackup(
                 parsed.folders.forEach { folder ->
                     val newFolderId = dao.insertFolder(
                         FolderInfoEntity(
+                            id = folder.id,
                             title = folder.title,
                             hide = folder.hide,
                             rank = folder.rank,
@@ -511,7 +526,13 @@ class LawnchairBackup(
         }
 
         @SuppressLint("MissingPermission")
-        suspend fun create(context: Context, contents: Int, screenshotBitmap: Bitmap, fileUri: Uri) {
+        suspend fun create(context: Context, contents: Int, screenshotBitmap: Bitmap, fileUri: Uri) = BackupState.mutex.withLock {
+            withContext(Dispatchers.IO + NonCancellable) {
+                createLocked(context, contents, screenshotBitmap, fileUri)
+            }
+        }
+
+        private suspend fun createLocked(context: Context, contents: Int, screenshotBitmap: Bitmap, fileUri: Uri) {
             val idp = LauncherAppState.getIDP(context)
             val createdAt = Timestamp.newBuilder()
                 .setSeconds(System.currentTimeMillis() / 1000)
@@ -530,14 +551,32 @@ class LawnchairBackup(
 
             val categoriesJson = if (contents.hasFlag(INCLUDE_CATEGORIES)) {
                 buildCategoriesJson(context)
-            } else null
+            } else {
+                null
+            }
 
             val foldersJson = if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
                 buildFoldersJson(context)
-            } else null
+            } else {
+                null
+            }
 
-            val pfd = context.contentResolver.openFileDescriptor(fileUri, "w")!!
-            withContext(Dispatchers.IO) {
+            val snapshotDirectory = File(context.cacheDir, "backup-${System.nanoTime()}")
+            check(snapshotDirectory.mkdirs()) { "Unable to create backup staging directory" }
+            try {
+                if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                    val appState = LauncherAppState.getInstance(context)
+                    BackupState.onModelThread {
+                        appState.model.modelDbController.writeSnapshot(File(snapshotDirectory, LAUNCHER_DB_FILE_NAME))
+                    }
+                    BackupState.writeDatabaseSnapshot(context, File(snapshotDirectory, PREFS_DB_FILE_NAME))
+                    BackupState.writeSharedPreferences(File(snapshotDirectory, PREFS_FILE_NAME), LauncherPrefs.getPrefs(context).all)
+                    BackupState.writeDataStore(
+                        File(snapshotDirectory, PREFS_DATASTORE_FILE_NAME),
+                        PreferenceManager2.getInstance(context).preferencesDataStore.data.first(),
+                    )
+                }
+                val pfd = context.contentResolver.openFileDescriptor(fileUri, "wt")!!
                 pfd.use {
                     ZipOutputStream(FileOutputStream(pfd.fileDescriptor).buffered()).use { out ->
                         out.putNextEntry(ZipEntry(INFO_FILE_NAME))
@@ -557,10 +596,11 @@ class LawnchairBackup(
                         }
 
                         if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
-                            getFiles(context, forRestore = false).entries.forEach {
-                                if (!it.value.exists()) return@forEach
-                                out.putNextEntry(ZipEntry(it.key))
-                                it.value.inputStream().copyTo(out)
+                            getFiles(context, forRestore = false).keys.forEach { name ->
+                                val snapshotFile = File(snapshotDirectory, name)
+                                if (!snapshotFile.exists()) return@forEach
+                                out.putNextEntry(ZipEntry(name))
+                                snapshotFile.inputStream().use { it.copyTo(out) }
                             }
                         }
 
@@ -575,6 +615,8 @@ class LawnchairBackup(
                         }
                     }
                 }
+            } finally {
+                snapshotDirectory.deleteRecursively()
             }
         }
 

@@ -1,11 +1,14 @@
 package app.lawnchair.deck
 
 import android.content.Context
-import android.util.Log
 import app.lawnchair.LawnchairLauncher
+import app.lawnchair.backup.BackupState
 import app.lawnchair.flowerpot.Flowerpot
+import app.lawnchair.gestures.config.GestureHandlerConfig
 import app.lawnchair.launcher
 import app.lawnchair.launcherNullable
+import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.util.categorizeAppsWithSystemAndGoogle
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.LauncherAppState
@@ -15,7 +18,6 @@ import com.android.launcher3.model.ModelDbController
 import com.android.launcher3.model.data.AppInfo
 import com.android.launcher3.model.data.FolderInfo
 import com.android.launcher3.model.data.WorkspaceItemInfo
-import com.android.launcher3.provider.RestoreDbTask
 import com.android.launcher3.util.ApplicationInfoWrapper
 import com.android.launcher3.util.ComponentKey
 import com.android.launcher3.util.PackageManagerHelper
@@ -23,83 +25,123 @@ import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class LawndeckManager(private val context: Context) {
 
-    // TODO
-
-    private val launcher = context.launcherNullable ?: LawnchairLauncher.instance?.launcher
+    private val launcher get() = context.launcherNullable ?: LawnchairLauncher.instance
 
     suspend fun enableLawndeck(
         onProgress: ((String) -> Unit)? = null,
-    ) = withContext(Dispatchers.IO) {
-        val completionDeferred = CompletableDeferred<Unit>()
-
-        if (!backupExists("bk")) createBackup("bk")
-        if (backupExists("lawndeck")) {
-            onProgress?.invoke("Restoring previous layout...")
-            restoreBackup("lawndeck")
-            completionDeferred.complete(Unit)
-        } else {
-            onProgress?.invoke("Categorizing apps...")
-            addAllAppsToWorkspace(onProgress) {
-                completionDeferred.complete(Unit)
+    ) = BackupState.mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            val previousMode = readMode()
+            if (previousMode.enabled) return@withContext
+            // The return layout belongs to this toggle, not the first-ever Lawndeck session.
+            createBackup("bk")
+            try {
+                if (backupExists("lawndeck")) {
+                    onProgress?.invoke("Restoring previous layout...")
+                    restoreBackup("lawndeck")
+                } else {
+                    val completed = CompletableDeferred<Unit>()
+                    onProgress?.invoke("Categorizing apps...")
+                    addAllAppsToWorkspace(onProgress) { completed.complete(Unit) }
+                    withTimeout(30_000) { completed.await() }
+                }
+                applyMode(ModeState(true, GestureHandlerConfig.NoOp, true))
+            } catch (failure: Throwable) {
+                rollback("bk", previousMode, failure)
+                throw failure
             }
         }
-
-        completionDeferred.await()
     }
 
-    suspend fun disableLawndeck() = withContext(Dispatchers.IO) {
-        if (backupExists("bk")) {
+    suspend fun disableLawndeck() = BackupState.mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            val previousMode = readMode()
+            if (!previousMode.enabled) return@withContext
+            check(backupExists("bk")) { "The original workspace snapshot is missing" }
             createBackup("lawndeck")
-            restoreBackup("bk")
+            try {
+                restoreBackup("bk")
+                applyMode(previousMode.copy(enabled = false, gesture = GestureHandlerConfig.OpenAppDrawer))
+            } catch (failure: Throwable) {
+                rollback("lawndeck", previousMode, failure)
+                throw failure
+            }
         }
     }
 
-    private fun createBackup(suffix: String) = runCatching {
-        getDatabaseFiles(suffix).apply {
-            db.copyTo(backupDb, overwrite = true)
-            if (journal.exists()) journal.copyTo(backupJournal, overwrite = true)
-        }
-    }.onFailure { Log.e("LawndeckManager", "Failed to create backup: $suffix", it) }
+    private data class ModeState(val enabled: Boolean, val gesture: GestureHandlerConfig, val addIcons: Boolean)
 
-    private fun restoreBackup(suffix: String) = runCatching {
-        getDatabaseFiles(suffix).apply {
-            backupDb.copyTo(db, overwrite = true)
-            if (backupJournal.exists()) backupJournal.copyTo(journal, overwrite = true)
-        }
-        postRestoreActions()
-    }.onFailure { Log.e("LawndeckManager", "Failed to restore backup: $suffix", it) }
-
-    private fun getDatabaseFiles(suffix: String): DatabaseFiles {
-        val idp = InvariantDeviceProfile.INSTANCE.get(context)
-        val dbFile = context.getDatabasePath(idp.dbFile)
-        return DatabaseFiles(
-            db = dbFile,
-            backupDb = File(dbFile.parent, "${suffix}_${idp.dbFile}"),
-            journal = File(dbFile.parent, "${idp.dbFile}-journal"),
-            backupJournal = File(dbFile.parent, "${suffix}_${idp.dbFile}-journal"),
+    private suspend fun readMode(): ModeState {
+        val prefs2 = PreferenceManager2.getInstance(context)
+        return ModeState(
+            prefs2.deckLayout.get().first(),
+            prefs2.swipeUpGestureHandler.get().first(),
+            PreferenceManager.getInstance(context).addIconToHome.get(),
         )
     }
 
-    private fun backupExists(suffix: String): Boolean = getDatabaseFiles(suffix).backupDb.exists()
+    private suspend fun applyMode(state: ModeState) = withContext(Dispatchers.Main) {
+        val prefs2 = PreferenceManager2.getInstance(context)
+        prefs2.swipeUpGestureHandler.set(state.gesture)
+        PreferenceManager.getInstance(context).addIconToHome.set(state.addIcons)
+        prefs2.deckLayout.set(state.enabled)
+    }
 
-    private fun postRestoreActions() {
-        ModelDbController(context).let { RestoreDbTask.performRestore(context, it) }
-        MainScope().launch(Dispatchers.Main) {
-            LauncherAppState.getInstance(context).model.forceReload()
+    private suspend fun rollback(suffix: String, mode: ModeState, failure: Throwable) {
+        try {
+            restoreBackup(suffix)
+        } catch (rollbackFailure: Throwable) {
+            failure.addSuppressed(rollbackFailure)
+        }
+        try {
+            applyMode(mode)
+        } catch (rollbackFailure: Throwable) {
+            failure.addSuppressed(rollbackFailure)
         }
     }
+
+    private suspend fun createBackup(suffix: String) {
+        val model = LauncherAppState.getInstance(context).model
+        BackupState.onModelThread {
+            model.modelDbController.writeSnapshot(backupFile(suffix))
+        }
+    }
+
+    private suspend fun restoreBackup(suffix: String) {
+        val model = LauncherAppState.getInstance(context).model
+        BackupState.onModelThread {
+            val snapshot = ModelDbController.openSnapshot(context, backupFile(suffix))
+            try {
+                // This is a same-device layout switch: preserve profiles and widget bindings.
+                model.modelDbController.replaceFavoritesFrom(snapshot)
+            } finally {
+                snapshot.closeSnapshot()
+            }
+        }
+        withContext(Dispatchers.Main) { model.forceReload() }
+    }
+
+    private fun backupFile(suffix: String): File {
+        val idp = InvariantDeviceProfile.INSTANCE.get(context)
+        val dbFile = context.getDatabasePath(idp.dbFile)
+        return File(dbFile.parent, "${suffix}_${idp.dbFile}")
+    }
+
+    private fun backupExists(suffix: String): Boolean = backupFile(suffix).exists()
 
     private fun addAllAppsToWorkspace(
         onProgress: ((String) -> Unit)?,
         onComplete: (() -> Unit)?,
     ) {
-        val apps = launcher?.mAppsView?.appsStore?.apps ?: return
+        val apps = checkNotNull(launcher?.mAppsView?.appsStore?.apps) { "Launcher is not ready" }
         if (apps.isEmpty()) {
             onComplete?.invoke()
             return
@@ -112,12 +154,12 @@ class LawndeckManager(private val context: Context) {
 
         onProgress?.invoke("Adding apps to workspace...")
 
-        val launcher = this.launcher ?: return
+        val launcher = checkNotNull(this.launcher) { "Launcher is not ready" }
         val model = launcher.model
 
         // Collect folders to add and count single apps
         val foldersToAdd = mutableListOf<FolderInfo>()
-        var singleAppCount = 0
+        val singleApps = mutableListOf<WorkspaceItemInfo>()
 
         // Process each category
         finalCategorizedApps.forEach { (category, categoryApps) ->
@@ -126,8 +168,7 @@ class LawndeckManager(private val context: Context) {
             if (categoryApps.size == 1) {
                 // Single app - add directly to workspace
                 val app = categoryApps.first()
-                ItemInstallQueue.INSTANCE.get(context).queueItem(app.targetPackage, app.user)
-                singleAppCount++
+                app.makeWorkspaceItem(context)?.let(singleApps::add)
             } else {
                 // Multiple apps - create folder
                 onProgress?.invoke("Creating folder: $category...")
@@ -138,35 +179,7 @@ class LawndeckManager(private val context: Context) {
             }
         }
 
-        // Add all folders with their items to workspace using custom task
-        if (foldersToAdd.isNotEmpty()) {
-            // Wait for folder task to complete
-            model.enqueueModelUpdateTask(
-                AddFoldersWithItemsTask(foldersToAdd) {
-                    // Callback runs on UI thread from model task
-                    // Also wait for ItemInstallQueue to finish for single apps
-                    // ItemInstallQueue processes asynchronously, so we need to wait a bit
-                    if (singleAppCount > 0) {
-                        // Post to handler to give ItemInstallQueue time to process
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            onComplete?.invoke()
-                        }, 800) // Wait for queue to process
-                    } else {
-                        onComplete?.invoke()
-                    }
-                },
-            )
-        } else {
-            // No folders, but may have single apps
-            if (singleAppCount > 0) {
-                // Give ItemInstallQueue time to process
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    onComplete?.invoke()
-                }, 800) // Wait for queue to process
-            } else {
-                onComplete?.invoke()
-            }
-        }
+        model.enqueueModelUpdateTask(AddFoldersWithItemsTask(foldersToAdd, singleApps, onComplete))
     }
 
     /**
@@ -270,11 +283,4 @@ class LawndeckManager(private val context: Context) {
         // Only return folder if it has items
         return if (folderInfo.getContents().isNotEmpty()) folderInfo else null
     }
-
-    private data class DatabaseFiles(
-        val db: File,
-        val backupDb: File,
-        val journal: File,
-        val backupJournal: File,
-    )
 }

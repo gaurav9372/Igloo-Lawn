@@ -22,12 +22,26 @@ import androidx.core.content.edit
 import app.lawnchair.font.FontCache
 import com.android.launcher3.InvariantDeviceProfile
 import com.android.launcher3.LauncherPrefs
+import com.android.launcher3.util.SafeCloseable
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
 
 sealed class BasePreferenceManager(private val context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
     val sp: SharedPreferences = LauncherPrefs.getPrefs(context)
     val prefsMap = mutableMapOf<String, BasePref<*>>()
+    private val deferredCallbacks = AtomicInteger()
+
+    /** A restore publishes multiple stores; do not migrate/recreate against a partial state. */
+    fun deferChangeCallbacks(): SafeCloseable {
+        deferredCallbacks.incrementAndGet()
+        return SafeCloseable {
+            if (deferredCallbacks.decrementAndGet() == 0) {
+                // clear() also removes keys which are absent in the imported preference map.
+                prefsMap.values.forEach { it.invalidate() }
+            }
+        }
+    }
 
     private var changedPrefs: MutableSet<BasePref<*>>? = null
     private var editor: SharedPreferences.Editor? = null
@@ -67,6 +81,10 @@ sealed class BasePreferenceManager(private val context: Context) : SharedPrefere
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         val pref = prefsMap[key] ?: return
+        if (deferredCallbacks.get() > 0) {
+            pref.invalidate()
+            return
+        }
         val changedSet = changedPrefs
         if (changedSet != null) {
             changedSet.add(pref)

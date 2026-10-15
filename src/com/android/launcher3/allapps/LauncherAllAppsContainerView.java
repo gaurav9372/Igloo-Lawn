@@ -18,6 +18,7 @@ package com.android.launcher3.allapps;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.WindowInsets;
+import android.widget.RelativeLayout;
 
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherState;
@@ -28,6 +29,34 @@ import com.android.launcher3.statemanager.StateManager;
  * AllAppsContainerView with launcher specific callbacks
  */
 public class LauncherAllAppsContainerView extends ActivityAllAppsContainerView<Launcher> {
+
+    private DrawerLoadingView mDrawerLoadingView;
+    private final java.util.function.Consumer<DrawerLoadProgress.State> mLoadListener =
+            progress -> mDrawerLoadingView.setProgress(progress);
+
+    @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+        mDrawerLoadingView = new DrawerLoadingView(getContext());
+        float density = getResources().getDisplayMetrics().density;
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
+                Math.round(176 * density), Math.round(176 * density));
+        params.addRule(RelativeLayout.CENTER_IN_PARENT);
+        addView(mDrawerLoadingView, params);
+        mDrawerLoadingView.setElevation(8 * density);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        mActivityContext.getModel().getDrawerLoadProgress().addListener(mLoadListener);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        mActivityContext.getModel().getDrawerLoadProgress().removeListener(mLoadListener);
+        super.onDetachedFromWindow();
+    }
 
     public LauncherAllAppsContainerView(Context context) {
         this(context, null);

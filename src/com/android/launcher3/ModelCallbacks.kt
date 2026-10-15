@@ -193,7 +193,9 @@ class ModelCallbacks(private var launcher: Launcher) : BgDataModel.Callbacks {
             hadWorkApps != launcher.appsView.shouldShowTabs() &&
                 launcher.stateManager.state == LauncherState.ALL_APPS
         ) {
-            launcher.stateManager.goToState(LauncherState.NORMAL)
+            // Rebinding the drawer can add/remove profile tabs while it is open. Refresh its
+            // geometry without navigating away from the state the user selected.
+            launcher.stateManager.reapplyState()
         }
     }
 

@@ -1607,6 +1607,14 @@ public class Launcher extends StatefulActivity<LauncherState>
         TraceHelper.INSTANCE.beginSection(ON_NEW_INTENT_EVT);
         super.onNewIntent(intent);
 
+        // Android may already have restarted its default home before our fallback alarm fires.
+        // This wake-up is not a Home press: keep the screen the user has since opened.
+        if (app.lawnchair.util.LawnchairUtilsKt.isLauncherRestartIntent(intent)) {
+            Log.d(TAG, "Ignoring redundant launcher restart intent");
+            TraceHelper.INSTANCE.endSection();
+            return;
+        }
+
         boolean alreadyOnHome = hasWindowFocus() && ((intent.getFlags() &
                 Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT)
                 != Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);

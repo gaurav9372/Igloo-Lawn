@@ -170,6 +170,14 @@ public class LoaderTask implements Runnable {
     private List<IconRequestInfo<WorkspaceItemInfo>> mWorkspaceIconRequestInfos = new ArrayList<>();
 
     private boolean mStopped;
+    private long mDrawerLoadGeneration;
+
+    /** Called only for the active model loader, never for workspace previews. */
+    public void startDrawerLoading() {
+        if (mParams.getLoadNonWorkspaceItems()) {
+            mDrawerLoadGeneration = mModel.getDrawerLoadProgress().begin();
+        }
+    }
 
     private final Set<PackageUserKey> mPendingPackages = new HashSet<>();
     private String mDbName;
@@ -320,7 +328,8 @@ public class LoaderTask implements Runnable {
         logASplit("loadAllApps finished");
 
         verifyNotStopped();
-        mLauncherBinder.bindAllApps();
+        mLauncherBinder.bindAllApps(() ->
+                mModel.getDrawerLoadProgress().finish(mDrawerLoadGeneration));
         logASplit("bindAllApps finished");
 
         verifyNotStopped();
@@ -416,9 +425,11 @@ public class LoaderTask implements Runnable {
                 }
             }
         } catch (CancellationException e) {
+            mModel.getDrawerLoadProgress().cancel(mDrawerLoadGeneration);
             // Loader stopped, ignore
             FileLog.w(TAG, "LoaderTask cancelled");
         } catch (Exception e) {
+            mModel.getDrawerLoadProgress().cancel(mDrawerLoadGeneration);
             memoryLogger.printLogs();
             throw e;
         }
@@ -429,6 +440,7 @@ public class LoaderTask implements Runnable {
     public synchronized void stopLocked() {
         FileLog.w(TAG, "stopLocked: Loader stopping");
         mStopped = true;
+        mModel.getDrawerLoadProgress().cancel(mDrawerLoadGeneration);
         this.notify();
     }
 
@@ -768,7 +780,15 @@ public class LoaderTask implements Runnable {
         Trace.beginSection("LoadAllAppsIconsInBulk");
 
         try {
-            mIconCache.getTitlesAndIconsInBulk(allAppsItemRequestInfos);
+            mModel.getDrawerLoadProgress().update(mDrawerLoadGeneration,
+                    0, allAppsItemRequestInfos.size());
+            mIconCache.getTitlesAndIconsInBulk(allAppsItemRequestInfos, completed -> {
+                verifyNotStopped();
+                mModel.getDrawerLoadProgress().update(mDrawerLoadGeneration,
+                        completed, allAppsItemRequestInfos.size());
+            });
+            mModel.getDrawerLoadProgress().update(mDrawerLoadGeneration,
+                    allAppsItemRequestInfos.size(), allAppsItemRequestInfos.size());
             if (Flags.restoreArchivedAppIconsFromDb()) {
                 for (IconRequestInfo<AppInfo> iconRequestInfo : allAppsItemRequestInfos) {
                     AppInfo appInfo = iconRequestInfo.itemInfo;

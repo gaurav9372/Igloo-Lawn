@@ -474,6 +474,18 @@ public class IconCache extends BaseIconCache {
      */
     public synchronized <T extends ItemInfoWithIcon> void getTitlesAndIconsInBulk(
             List<IconRequestInfo<T>> iconRequestInfos) {
+        getTitlesAndIconsInBulk(iconRequestInfos, null);
+    }
+
+    /** Reports completed icon requests, including cache hits and fallback icons. */
+    public synchronized <T extends ItemInfoWithIcon> void getTitlesAndIconsInBulk(
+            List<IconRequestInfo<T>> iconRequestInfos,
+            @Nullable java.util.function.IntConsumer onIconsLoaded) {
+        int[] completed = {0};
+        java.util.function.IntConsumer onCompleted = count -> {
+            completed[0] += count;
+            if (onIconsLoaded != null) onIconsLoaded.accept(completed[0]);
+        };
         Map<Pair<UserHandle, CacheLookupFlag>, List<IconRequestInfo<T>>> iconLoadSubsectionsMap =
                 iconRequestInfos.stream()
                         .filter(iconRequest -> {
@@ -483,6 +495,7 @@ public class IconCache extends BaseIconCache {
                                                 + iconRequest.itemInfo);
                                 iconRequest.itemInfo.bitmap = getDefaultIcon(
                                         iconRequest.itemInfo.user);
+                                onCompleted.accept(1);
                                 return false;
                             }
                             return true;
@@ -509,7 +522,7 @@ public class IconCache extends BaseIconCache {
                                     iconRequest.itemInfo.getTargetComponent()));
 
             Trace.beginSection("loadIconSubsectionInBulk");
-            loadIconSubsection(sectionKey, filteredList, duplicateIconRequestsMap);
+            loadIconSubsection(sectionKey, filteredList, duplicateIconRequestsMap, onCompleted);
             Trace.endSection();
         });
         Trace.endSection();
@@ -518,7 +531,9 @@ public class IconCache extends BaseIconCache {
     private <T extends ItemInfoWithIcon> void loadIconSubsection(
             Pair<UserHandle, CacheLookupFlag> sectionKey,
             List<IconRequestInfo<T>> filteredList,
-            Map<ComponentName, List<IconRequestInfo<T>>> duplicateIconRequestsMap) {
+            Map<ComponentName, List<IconRequestInfo<T>>> duplicateIconRequestsMap,
+            java.util.function.IntConsumer onCompleted) {
+        java.util.Set<ComponentName> completedComponents = new java.util.HashSet<>();
         Trace.beginSection("loadIconSubsectionWithDatabase");
         try (Cursor c = createBulkQueryCursor(
                 filteredList,
@@ -544,6 +559,15 @@ public class IconCache extends BaseIconCache {
 
                         for (IconRequestInfo<T> iconRequest : duplicateIconRequests) {
                             applyCacheEntry(entry, iconRequest.itemInfo);
+                        }
+                        // Cache hits are finished as soon as they are decoded. Entries needing
+                        // a fallback are counted later, so a request is never counted twice.
+                        ItemInfoWithIcon loaded = duplicateIconRequests.get(0).itemInfo;
+                        if (!TextUtils.isEmpty(loaded.title) && loaded.bitmap != null
+                                && loaded.bitmap != BitmapInfo.LOW_RES_INFO
+                                && !isDefaultIcon(loaded.bitmap, loaded.user)
+                                && completedComponents.add(cn)) {
+                            onCompleted.accept(duplicateIconRequests.size());
                         }
                     } else {
                         Log.e(TAG, "Found entry in icon database but no main activity "
@@ -607,6 +631,9 @@ public class IconCache extends BaseIconCache {
                 for (IconRequestInfo<T> iconRequest : duplicateIconRequestsMap.get(cn)) {
                     applyCacheEntry(entry, iconRequest.itemInfo);
                 }
+            }
+            if (completedComponents.add(cn)) {
+                onCompleted.accept(duplicateIconRequestsMap.get(cn).size());
             }
         }
         Trace.endSection();

@@ -141,6 +141,28 @@ class PackageUpdatedTaskTest {
     }
 
     @Test
+    fun `OP_ADD refreshes a retained frozen drawer entry`() {
+        mockApplicationInfo.enabled = true
+        expectedActivityInfo.apply {
+            whenever(user).thenReturn(mUser)
+        }
+        mContext.spyService(LauncherApps::class.java).apply {
+            whenever(isPackageEnabled(expectedPackage, mUser)).thenReturn(true)
+            whenever(isActivityEnabled(expectedComponent, mUser)).thenReturn(true)
+        }
+        val frozen = AppInfo(mContext, expectedActivityInfo, mUser).apply {
+            runtimeStatusFlags = WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER or
+                WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP
+        }
+        mAllAppsList.add(frozen, expectedActivityInfo)
+        TestUtil.runOnExecutorSync(Executors.MODEL_EXECUTOR) {
+            mAllAppsList.addPackage(mContext, expectedPackage, mUser)
+        }
+        assertThat(mAllAppsList.data).hasSize(1)
+        assertThat(mAllAppsList.data.first().isDisabled).isFalse()
+    }
+
+    @Test
     fun `OP_UPDATE triggers model callbacks and updates items in AllAppsList`() {
         // Given
         val taskUnderTest = PackageUpdatedTask(OP_UPDATE, mUser, expectedPackage)
@@ -204,15 +226,26 @@ class PackageUpdatedTaskTest {
         // Then
         verify(mAllAppsList).updateDisabledFlags(any(), any())
         verify(mockTaskController).bindUpdatedWorkspaceItems(listOf(expectedWorkspaceItem))
+        assertThat(expectedWorkspaceItem.runtimeStatusFlags and
+            WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER).isEqualTo(0)
         assertThat(mAllAppsList.getAndResetChangeFlag()).isTrue()
         assertThat(appsListRepo.appsListStateRef.value.apps).isNotEmpty()
     }
 
     @Test
     @EnableFlags(Flags.FLAG_MODEL_REPOSITORY)
-    fun `OP_UNSUSPEND triggers no callbacks when app not suspended`() {
+    fun `OP_UNSUSPEND refreshes apps and clears stale freeze flags`() {
         // Given
         val taskUnderTest = PackageUpdatedTask(OP_UNSUSPEND, mUser, expectedPackage)
+        expectedWorkspaceItem.runtimeStatusFlags =
+            WorkspaceItemInfo.FLAG_DISABLED_SUSPENDED or
+                WorkspaceItemInfo.FLAG_DISABLED_BY_PUBLISHER or
+                WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP
+        mockApplicationInfo.enabled = true
+        mContext.spyService(LauncherApps::class.java).apply {
+            whenever(isPackageEnabled(expectedPackage, mUser)).thenReturn(true)
+            whenever(isActivityEnabled(expectedComponent, mUser)).thenReturn(true)
+        }
         // When
         mDataModel.addItem(mContext, expectedWorkspaceItem)
         mAllAppsList.getAndResetChangeFlag()
@@ -222,9 +255,10 @@ class PackageUpdatedTaskTest {
         }
         // Then
         verify(mAllAppsList).updateDisabledFlags(any(), any())
-        verify(mockTaskController).bindUpdatedWorkspaceItems(emptyList())
-        assertThat(mAllAppsList.getAndResetChangeFlag()).isFalse()
-        assertThat(appsListRepo.appsListStateRef.value.apps).isEmpty()
+        verify(mockTaskController).bindUpdatedWorkspaceItems(listOf(expectedWorkspaceItem))
+        assertThat(expectedWorkspaceItem.isDisabled).isFalse()
+        assertThat(mAllAppsList.getAndResetChangeFlag()).isTrue()
+        assertThat(mAllAppsList.data).isNotEmpty()
     }
 
     @EnableFlags(FLAG_ENABLE_PRIVATE_SPACE)

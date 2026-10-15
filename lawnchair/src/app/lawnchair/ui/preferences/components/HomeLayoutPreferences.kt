@@ -1,5 +1,7 @@
 ﻿package app.lawnchair.ui.preferences.components
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import app.lawnchair.preferences2.preferenceManager2
 import app.lawnchair.ui.preferences.components.controls.SwitchPreferenceWithPreview
 import app.lawnchair.util.BackHandler
 import com.android.launcher3.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,11 +52,9 @@ fun HomeLayoutSettings(
     modifier: Modifier = Modifier,
 ) {
     val prefs2 = preferenceManager2()
-    val prefs = preferenceManager()
     val context = LocalContext.current
 
     val deskLayout = prefs2.deckLayout.getAdapter()
-    val addNewAppToHome = prefs.addIconToHome.getAdapter()
 
     val deckManager = remember { LawndeckManager(context) }
     val coroutineScope = rememberCoroutineScope()
@@ -112,36 +113,33 @@ fun HomeLayoutSettings(
         label = stringResource(R.string.layout),
         checked = deskLayout.state.value,
         onCheckedChange = { newValue ->
+            if (isLoading) return@SwitchPreferenceWithPreview
             isLoading = true
             loadingMessage = ""
-            if (newValue) {
-                coroutineScope.launch {
-                    prefs2.swipeUpGestureHandler.set(GestureHandlerConfig.NoOp)
-                    prefs2.deckLayout.set(true)
-                    addNewAppToHome.onChange(true)
-                    withContext(Dispatchers.IO) {
+            coroutineScope.launch {
+                try {
+                    if (newValue) {
                         deckManager.enableLawndeck { message ->
                             // Update on main thread using coroutine scope
                             coroutineScope.launch(Dispatchers.Main) {
                                 loadingMessage = message
                             }
                         }
-                    }
-                    isLoading = false
-                    loadingMessage = ""
-                }
-            } else {
-                coroutineScope.launch {
-                    prefs2.swipeUpGestureHandler.set(GestureHandlerConfig.OpenAppDrawer)
-                    prefs2.deckLayout.set(false)
-                    withContext(Dispatchers.IO) {
+                    } else {
                         deckManager.disableLawndeck()
                     }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    Log.e("HomeLayoutSettings", "Unable to change layout", failure)
+                    Toast.makeText(context, R.string.lawndeck_change_error, Toast.LENGTH_LONG).show()
+                } finally {
                     isLoading = false
                     loadingMessage = ""
                 }
             }
         },
+        enabled = !isLoading,
         disabledLabel = stringResource(R.string.feed_default),
         disabledContent = {
             PreviewLayout(

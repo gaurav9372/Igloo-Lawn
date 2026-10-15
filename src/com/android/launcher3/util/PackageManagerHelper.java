@@ -265,7 +265,10 @@ public class PackageManagerHelper {
         }
         if (cn != null) {
             try {
-                int compState = mPm.getComponentEnabledSetting(cn);
+                // PackageManager component settings belong to the launcher's own user.
+                int compState = Process.myUserHandle().equals(user)
+                        ? mPm.getComponentEnabledSetting(cn)
+                        : PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
                 if (compState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
                     return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
                 }
@@ -306,7 +309,10 @@ public class PackageManagerHelper {
             return 0;
         }
         try {
-            int state = mPm.getApplicationEnabledSetting(pkgName);
+            // Never apply the personal profile's freeze state to another profile.
+            int state = user == null || Process.myUserHandle().equals(user)
+                    ? mPm.getApplicationEnabledSetting(pkgName)
+                    : PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
             if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
                 return com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_DEEP_SLEEP;
             }

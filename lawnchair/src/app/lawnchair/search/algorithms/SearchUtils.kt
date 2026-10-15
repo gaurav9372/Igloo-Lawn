@@ -63,7 +63,7 @@ fun Sequence<AppInfo>.filterHiddenApps(
         HiddenAppsInSearch.IF_NAME_TYPED -> {
             filter {
                 it.toComponentKey().toString() !in hiddenApps ||
-                    it.title.toString().lowercase(Locale.getDefault()) == query
+                    (query.isNotBlank() && it.title.toString().lowercase(Locale.getDefault()) == query)
             }
         }
 

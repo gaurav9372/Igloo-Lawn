@@ -27,6 +27,7 @@ import static com.android.launcher3.model.data.WorkspaceItemInfo.FLAG_RESTORED_I
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
@@ -219,6 +220,14 @@ public class PackageUpdatedTask implements ModelUpdateTask {
             case OP_UNSUSPEND:
                 flagOp = FlagOp.NO_OP.setFlag(
                         WorkspaceItemInfo.FLAG_DISABLED_SUSPENDED, mOp == OP_SUSPEND);
+                if (mOp == OP_UNSUSPEND) {
+                    // Thawing can change both enabled activities and cached disabled flags.
+                    for (String packageName : packages) {
+                        iconCache.updateIconsForPkg(packageName, mUser);
+                        activitiesLists.put(packageName,
+                                appsList.updatePackage(context, packageName, mUser));
+                    }
+                }
                 appsList.updateDisabledFlags(matcher, flagOp);
                 break;
             case OP_USER_AVAILABILITY_CHANGE: {
@@ -259,7 +268,8 @@ public class PackageUpdatedTask implements ModelUpdateTask {
             final List<ItemInfo> updatedItems;
 
             // For system apps, package manager send OP_UPDATE when an app is enabled.
-            final boolean isNewApkAvailable = mOp == OP_ADD || mOp == OP_UPDATE;
+            final boolean isNewApkAvailable = mOp == OP_ADD || mOp == OP_UPDATE
+                    || mOp == OP_UNSUSPEND;
             synchronized (dataModel) {
                 updatedItems = dataModel.updateAndCollectWorkspaceItemInfos(mUser, itemInfo -> {
 
@@ -384,6 +394,11 @@ public class PackageUpdatedTask implements ModelUpdateTask {
 
                             if (itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
                                 if (activities != null && !activities.isEmpty() && disabledFlags == 0) {
+                                    itemInfo.runtimeStatusFlags = FlagOp.NO_OP.setFlag(
+                                            WorkspaceItemInfo.FLAG_DISABLED_SUSPENDED,
+                                            (activities.get(0).getApplicationInfo().flags
+                                                    & ApplicationInfo.FLAG_SUSPENDED) != 0)
+                                            .apply(itemInfo.runtimeStatusFlags);
                                     itemInfo.setNonResizeable(ApiWrapper.INSTANCE.get(context)
                                             .isNonResizeableActivity(activities.get(0)));
                                     itemInfo.runtimeStatusFlags &= ~WorkspaceItemInfo.FLAG_DISABLED_DEEP_SLEEP;
@@ -408,7 +423,8 @@ public class PackageUpdatedTask implements ModelUpdateTask {
                                 iconCache.getTitleAndIcon(
                                         itemInfo, itemInfo.getMatchingLookupFlag());
                             }
-                        } else if (!isNewApkAvailable && itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
+                        } else if ((mOp == OP_REMOVE || mOp == OP_UNAVAILABLE)
+                                && itemInfo.itemType == Favorites.ITEM_TYPE_APPLICATION) {
                             PackageManagerHelper pmHelper = PackageManagerHelper.INSTANCE.get(context);
                             int disabledFlags = pmHelper.getDisabledFlags(packageName, mUser);
                             boolean isInstalled = pmHelper.isAppInstalled(packageName, mUser);

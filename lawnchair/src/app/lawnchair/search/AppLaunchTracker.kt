@@ -2,12 +2,15 @@ package app.lawnchair.search
 
 import android.content.Context
 import android.content.SharedPreferences
+import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.preferences2.firstCached
+import app.lawnchair.search.algorithms.filterHiddenApps
 import com.android.launcher3.LauncherAppState
 import com.android.launcher3.model.data.AppInfo
 import com.android.launcher3.util.ComponentKey
+import java.util.concurrent.TimeUnit
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 object AppLaunchTracker {
     private const val PREFS_NAME = "app_launch_tracker_prefs"
@@ -61,6 +64,7 @@ object AppLaunchTracker {
 
     @Synchronized
     fun getFrequentApps(context: Context, maxCount: Int = 5, daysWindow: Int = 28): List<AppInfo> {
+        if (maxCount <= 0) return emptyList()
         val prefs = getPrefs(context)
         val events = loadEvents(prefs)
         val cutoffTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(daysWindow.toLong())
@@ -77,10 +81,14 @@ object AppLaunchTracker {
 
         val sortedKeys = counts.entries.sortedWith(
             compareByDescending<Map.Entry<String, Int>> { it.value }
-                .thenByDescending { lastSeen[it.key] ?: 0L }
-        ).map { it.key }.take(maxCount)
+                .thenByDescending { lastSeen[it.key] ?: 0L },
+        ).map { it.key }
 
-        return resolveAppInfos(context, sortedKeys)
+        val prefs2 = PreferenceManager2.getInstance(context)
+        return resolveAppInfos(context, sortedKeys).asSequence()
+            .filterHiddenApps("", prefs2.hiddenApps.firstCached(), prefs2.hiddenAppsInSearch.firstCached())
+            .take(maxCount)
+            .toList()
     }
 
     private fun resolveAppInfos(context: Context, componentKeys: List<String>): List<AppInfo> {

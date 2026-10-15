@@ -29,6 +29,7 @@ import static com.android.launcher3.provider.LauncherDbUtils.tableExists;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -66,6 +67,8 @@ import com.android.launcher3.util.IntArray;
 import com.android.launcher3.util.SandboxContext;
 import com.android.launcher3.widget.LauncherWidgetHolder;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -500,6 +503,103 @@ public class ModelDbController {
     public SQLiteDatabase getDb() {
         createDbIfNotExists();
         return mOpenHelper.getWritableDatabase();
+    }
+
+    /** Opens an isolated backup without renaming restored.db or running startup restore tasks. */
+    public static ModelDbController openSnapshot(Context context, File file) {
+        if (!file.isFile()) {
+            throw new IllegalArgumentException("Workspace snapshot is missing: " + file);
+        }
+        long originalCount;
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null,
+                SQLiteDatabase.OPEN_READONLY)) {
+            if (!tableExists(db, TABLE_NAME)) {
+                throw new IllegalArgumentException("Workspace snapshot has no favorites table");
+            }
+            originalCount = DatabaseUtils.queryNumEntries(db, TABLE_NAME);
+            try (Cursor check = db.rawQuery("PRAGMA quick_check", null)) {
+                if (!check.moveToFirst() || !"ok".equals(check.getString(0))) {
+                    throw new IllegalArgumentException("Workspace snapshot is corrupt");
+                }
+            }
+        }
+        ModelDbController controller = createSnapshotController(context, file);
+        try {
+            if (originalCount > 0
+                    && DatabaseUtils.queryNumEntries(controller.getDb(), TABLE_NAME) == 0) {
+                // DatabaseHelper falls back to an empty DB for unsupported migrations.
+                throw new IllegalArgumentException("Workspace snapshot could not be migrated safely");
+            }
+            return controller;
+        } catch (RuntimeException e) {
+            controller.closeSnapshot();
+            throw e;
+        }
+    }
+
+    private static ModelDbController createSnapshotController(Context context, File file) {
+        ModelDbController controller = new ModelDbController(context);
+        try {
+            controller.mOpenHelper = controller.createDatabaseHelper(true, file.getAbsolutePath());
+            return controller;
+        } catch (RuntimeException e) {
+            controller.closeSnapshot();
+            throw e;
+        }
+    }
+
+    /** Only for controllers returned by openSnapshot; never close the live model controller. */
+    public void closeSnapshot() {
+        if (mOpenHelper != null) {
+            mOpenHelper.close();
+            mOpenHelper = null;
+        }
+    }
+
+    /** Call on MODEL_EXECUTOR: copy committed rows, including those still in the WAL. */
+    @WorkerThread
+    public void writeSnapshot(File target) throws IOException {
+        File pending = new File(target.getParentFile(), target.getName() + ".pending");
+        SQLiteDatabase.deleteDatabase(pending);
+        try {
+            ModelDbController snapshot = createSnapshotController(mContext, pending);
+            try {
+                snapshot.replaceFavoritesFrom(this);
+                // Close/checkpoint the destination before publishing its single database file.
+            } finally {
+                snapshot.closeSnapshot();
+            }
+            if (!pending.renameTo(target)) {
+                throw new IOException("Unable to publish workspace snapshot " + target);
+            }
+            // Legacy snapshots may have sidecars left by the old file-copy implementation.
+            for (String suffix : new String[]{"-journal", "-wal", "-shm"}) {
+                File sidecar = new File(target.getPath() + suffix);
+                if (sidecar.exists() && !sidecar.delete()) {
+                    throw new IOException("Unable to remove stale snapshot sidecar " + sidecar);
+                }
+            }
+        } finally {
+            SQLiteDatabase.deleteDatabase(pending);
+        }
+    }
+
+    /** Replaces rows transactionally, keeping the live SQLite connection and DAO users valid. */
+    @WorkerThread
+    public void replaceFavoritesFrom(ModelDbController source) {
+        SQLiteDatabase db = getDb();
+        try (Cursor rows = source.getDb().query(TABLE_NAME, null, null, null, null, null, null);
+                SQLiteTransaction transaction = new SQLiteTransaction(db)) {
+            db.delete(TABLE_NAME, null, null);
+            while (rows.moveToNext()) {
+                ContentValues values = new ContentValues();
+                DatabaseUtils.cursorRowToContentValues(rows, values);
+                db.insertOrThrow(TABLE_NAME, null, values);
+                mOpenHelper.checkId(values);
+            }
+            onAddOrDeleteOp(db);
+            transaction.commit();
+        }
     }
 
     private void onAddOrDeleteOp(SQLiteDatabase db) {

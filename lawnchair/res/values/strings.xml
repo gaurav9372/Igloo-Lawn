@@ -16,6 +16,10 @@
   -->
 
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="drawer_loading_label">Loading apps</string>
+    <string name="drawer_loading_progress">Loading apps: %1$s</string>
+    <string name="drawer_loading_count">%1$s/%2$s</string>
+    <string name="drawer_loading_progress_with_count">Loading apps: %1$s, %2$s</string>
     <!-- TODO: Rename all strings to follow CONTRIBUTING.md guidelines -->
     <!--
 
@@ -698,6 +702,7 @@
 
     <string name="home_lawn_deck_label">Deck</string>
     <string name="home_lawn_deck_label_beta">Deck (Beta)</string>
+    <string name="lawndeck_change_error">Unable to change layout. Please try again.</string>
     <string name="home_lawn_deck_description">Effortlessly access your apps with Deck, a drawerless experience designed for simplicity and seamless organization</string>
 
     <string name="auto_add_shortcuts_label">Add new apps to home screen</string>

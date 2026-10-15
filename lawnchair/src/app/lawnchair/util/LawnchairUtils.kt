@@ -103,13 +103,23 @@ fun restartLauncher(context: Context) {
     restartLauncher(context, intent)
 }
 
+private const val EXTRA_LAUNCHER_RESTART = "app.lawnchair.extra.INTERNAL_RESTART"
+
+fun createLauncherRestartIntent(intent: Intent): Intent =
+    Intent(intent).putExtra(EXTRA_LAUNCHER_RESTART, true)
+
+fun isLauncherRestartIntent(intent: Intent?): Boolean =
+    intent?.action == Intent.ACTION_MAIN &&
+        intent.getBooleanExtra(EXTRA_LAUNCHER_RESTART, false)
+
 fun restartLauncher(context: Context, intent: Intent?) {
-    context.startActivity(intent)
+    val restartIntent = createLauncherRestartIntent(requireNotNull(intent))
+    context.startActivity(restartIntent)
 
     // Create a pending intent so the application is restarted after System.exit(0) was called.
     // We use an AlarmManager to call this intent in 100ms
     val mPendingIntent =
-        PendingIntent.getActivity(context, 0, intent, FLAG_CANCEL_CURRENT or FLAG_IMMUTABLE)
+        PendingIntent.getActivity(context, 0, restartIntent, FLAG_CANCEL_CURRENT or FLAG_IMMUTABLE)
     val mgr = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     mgr[AlarmManager.RTC, System.currentTimeMillis() + 100] = mPendingIntent
 
