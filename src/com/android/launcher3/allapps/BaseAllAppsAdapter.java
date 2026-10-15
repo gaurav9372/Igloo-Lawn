@@ -27,6 +27,8 @@ import static com.android.launcher3.allapps.UserProfileManager.STATE_DISABLED;
 import static com.android.launcher3.allapps.UserProfileManager.STATE_ENABLED;
 
 import android.content.Context;
+import android.content.ComponentName;
+import android.os.UserHandle;
 import android.graphics.Typeface;
 import android.util.Log;
 import android.util.TypedValue;
@@ -49,6 +51,8 @@ import com.android.launcher3.BubbleTextView;
 import com.android.launcher3.R;
 import com.android.launcher3.allapps.search.SearchAdapterProvider;
 import com.android.launcher3.folder.FolderIcon;
+import com.android.launcher3.icons.BitmapInfo;
+import com.android.launcher3.model.data.ItemInfoWithIcon;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.FolderInfo;
 import com.android.launcher3.model.data.ItemInfo;
@@ -123,6 +127,12 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         public int rowAppIndex;
         // The associated ItemInfoWithIcon for the item
         public AppInfo itemInfo = null;
+        // Keep binding the live model, but compare the values captured for this row. The
+        // model can mutate AppInfo in place before the drawer receives its next update.
+        @Nullable private ItemContentSnapshot mAppContent;
+        @Nullable private ItemContentSnapshot mFolderContent;
+        @Nullable private java.util.List<ItemContentSnapshot> mFolderChildren;
+        private int mFolderOptions;
         // Associated category ID if part of a user category
         public String categoryId = null;
         // Private App Decorator
@@ -141,6 +151,7 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         public static AdapterItem asApp(AppInfo appInfo) {
             AdapterItem item = new AdapterItem(VIEW_TYPE_ICON);
             item.itemInfo = appInfo;
+            item.mAppContent = appInfo == null ? null : new ItemContentSnapshot(appInfo);
             return item;
         }
 
@@ -154,6 +165,14 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
         public static AdapterItem asFolder(FolderInfo folderInfo) {
             AdapterItem item = new AdapterItem(VIEW_TYPE_FOLDER);
             item.folderInfo = folderInfo;
+            if (folderInfo != null) {
+                item.mFolderContent = new ItemContentSnapshot(folderInfo);
+                item.mFolderOptions = folderInfo.options;
+                item.mFolderChildren = new java.util.ArrayList<>(folderInfo.getContents().size());
+                for (ItemInfo child : folderInfo.getContents()) {
+                    item.mFolderChildren.add(new ItemContentSnapshot(child));
+                }
+            }
             return item;
         }
 
@@ -216,10 +235,8 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
          */
         public boolean isContentSame(AdapterItem other) {
             if (!isSameAs(other)) return false;
-            // AppInfo and FolderInfo are mutable and shared by the old and new lists.
-            // Rebind data-bearing rows: reference equality or folder size/title cannot
-            // detect icon updates or replacement of a folder child. In particular, every
-            // row has a default FolderInfo, which must never stand in for app contents.
+            // Comparing the live objects would see the new values on both sides and miss
+            // disabled-state/icon changes. Only snapshots describe the previously bound row.
             if (viewType == VIEW_TYPE_CATEGORY_HEADER) {
                 return java.util.Objects.equals(sectionTitle, other.sectionTitle)
                         && categoryAppCount == other.categoryAppCount
@@ -228,81 +245,68 @@ public abstract class BaseAllAppsAdapter<T extends Context & ActivityContext> ex
             }
             if (viewType == VIEW_TYPE_FOLDER) {
                 return java.util.Objects.equals(categoryId, other.categoryId)
-                        && areFolderContentsSame(folderInfo, other.folderInfo);
+                        && areFolderContentsSame(other);
             }
             if (viewType == VIEW_TYPE_ICON) {
                 return java.util.Objects.equals(categoryId, other.categoryId)
-                        && areAppContentsSame(itemInfo, other.itemInfo);
+                        && mAppContent != null && mAppContent.matches(other.mAppContent);
             }
             return itemInfo == null && other.itemInfo == null;
         }
 
-        private static boolean areAppContentsSame(@Nullable AppInfo a, @Nullable AppInfo b) {
-            if (a == b) {
-                return true;
-            }
-            if (a == null || b == null) {
+        private boolean areFolderContentsSame(AdapterItem other) {
+            if (mFolderContent == null || !mFolderContent.matches(other.mFolderContent)
+                    || mFolderOptions != other.mFolderOptions
+                    || mFolderChildren == null || other.mFolderChildren == null
+                    || mFolderChildren.size() != other.mFolderChildren.size()) {
                 return false;
             }
-            if (!java.util.Objects.equals(a.componentName, b.componentName)) {
-                return false;
-            }
-            if (!java.util.Objects.equals(a.user, b.user)) {
-                return false;
-            }
-            if (!java.util.Objects.equals(a.title, b.title)) {
-                return false;
-            }
-            if (a.bitmap != b.bitmap) {
-                return false;
-            }
-            if (a.runtimeStatusFlags != b.runtimeStatusFlags) {
-                return false;
+            for (int i = 0; i < mFolderChildren.size(); i++) {
+                if (!mFolderChildren.get(i).matches(other.mFolderChildren.get(i))) return false;
             }
             return true;
         }
 
-        private static boolean areFolderContentsSame(@Nullable FolderInfo a, @Nullable FolderInfo b) {
-            if (a == b) {
-                return true;
-            }
-            if (a == null || b == null) {
-                return false;
-            }
-            if (a.id != b.id) {
-                return false;
-            }
-            if (!java.util.Objects.equals(a.title, b.title)) {
-                return false;
-            }
-            java.util.List<ItemInfo> aContents = a.getContents();
-            java.util.List<ItemInfo> bContents = b.getContents();
-            if (aContents.size() != bContents.size()) {
-                return false;
-            }
-            for (int i = 0; i < aContents.size(); i++) {
-                ItemInfo itemA = aContents.get(i);
-                ItemInfo itemB = bContents.get(i);
-                if (itemA == itemB) {
-                    continue;
-                }
-                if (itemA == null || itemB == null) {
-                    return false;
-                }
-                if (itemA.id != itemB.id) {
-                    return false;
-                }
-                if (!java.util.Objects.equals(itemA.getTargetComponent(), itemB.getTargetComponent())) {
-                    return false;
-                }
-                if (!java.util.Objects.equals(itemA.user, itemB.user)) {
-                    return false;
-                }
-                if (!java.util.Objects.equals(itemA.title, itemB.title)) {
-                    return false;
+        /** Immutable rendered values; never retain a mutable ItemInfo as the comparison key. */
+        private static final class ItemContentSnapshot {
+            private final int id;
+            private final int itemType;
+            private final ComponentName component;
+            private final UserHandle user;
+            private final String title;
+            private final String description;
+            private final BitmapInfo bitmap;
+            private final int bitmapFlags;
+            private final int runtimeFlags;
+            private final int progress;
+
+            ItemContentSnapshot(ItemInfo info) {
+                id = info.id;
+                itemType = info.itemType;
+                component = info.getTargetComponent();
+                user = info.user;
+                title = info.title == null ? null : info.title.toString();
+                description = info.contentDescription == null ? null : info.contentDescription.toString();
+                if (info instanceof ItemInfoWithIcon iconInfo) {
+                    bitmap = iconInfo.bitmap;
+                    bitmapFlags = bitmap == null ? 0 : bitmap.flags;
+                    runtimeFlags = iconInfo.runtimeStatusFlags;
+                    progress = iconInfo.getProgressLevel();
+                } else {
+                    bitmap = null;
+                    bitmapFlags = runtimeFlags = progress = 0;
                 }
             }
-            return true;
+
+            boolean matches(@Nullable ItemContentSnapshot other) {
+                return other != null && id == other.id && itemType == other.itemType
+                        && java.util.Objects.equals(component, other.component)
+                        && java.util.Objects.equals(user, other.user)
+                        && java.util.Objects.equals(title, other.title)
+                        && java.util.Objects.equals(description, other.description)
+                        && bitmap == other.bitmap && bitmapFlags == other.bitmapFlags
+                        && runtimeFlags == other.runtimeFlags && progress == other.progress;
+            }
         }
 
         @Nullable

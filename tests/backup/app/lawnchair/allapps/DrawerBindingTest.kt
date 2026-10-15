@@ -10,6 +10,9 @@ import com.android.launcher3.ModelCallbacks
 import com.android.launcher3.allapps.ActivityAllAppsContainerView
 import com.android.launcher3.allapps.AllAppsStore
 import com.android.launcher3.util.PackageUserKey
+import com.android.launcher3.statemanager.StateManager.StateListener
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import app.lawnchair.util.createLauncherRestartIntent
 import app.lawnchair.util.isLauncherRestartIntent
 import org.junit.Assert.*
@@ -24,6 +27,12 @@ class DrawerBindingTest {
         val intent = Intent().setClassName(context.packageName, "app.lawnchair.LawnchairLauncher")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val launcher = instrumentation.startActivitySync(intent) as Launcher
+        val homeReached = CountDownLatch(1)
+        val homeListener = object : StateListener<LauncherState> {
+            override fun onStateTransitionComplete(state: LauncherState) {
+                if (state == LauncherState.NORMAL) homeReached.countDown()
+            }
+        }
         try {
             val deadline = SystemClock.uptimeMillis() + 30_000
             while (!launcher.model.isModelLoaded() && SystemClock.uptimeMillis() < deadline) {
@@ -65,18 +74,26 @@ class DrawerBindingTest {
                 onNewIntent.invoke(launcher, createLauncherRestartIntent(home))
                 assertSame(LauncherState.ALL_APPS, launcher.stateManager.state)
 
-                // Genuine Home intents must continue to close the drawer.
-                onNewIntent.invoke(launcher, home)
-                assertSame(LauncherState.NORMAL, launcher.stateManager.state)
-
                 // A user who has already closed the drawer must also keep their chosen screen.
                 launcher.stateManager.goToState(LauncherState.NORMAL, false)
                 tabsField.setBoolean(launcher.appsView, !actualTabs)
                 ModelCallbacks(launcher).bindAllApplications(store.apps, flags, uidMap)
                 assertSame(LauncherState.NORMAL, launcher.stateManager.state)
+
+                // Home navigation can post an animation; allow the main loop to finish it.
+                launcher.stateManager.goToState(LauncherState.ALL_APPS, false)
+                launcher.stateManager.addStateListener(homeListener)
+                onNewIntent.invoke(launcher, home)
+            }
+            assertTrue("Genuine Home intent must close the drawer", homeReached.await(5, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                assertSame(LauncherState.NORMAL, launcher.stateManager.state)
             }
         } finally {
-            instrumentation.runOnMainSync { launcher.finish() }
+            instrumentation.runOnMainSync {
+                launcher.stateManager.removeStateListener(homeListener)
+                launcher.finish()
+            }
         }
     }
 
